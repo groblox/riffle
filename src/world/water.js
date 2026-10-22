@@ -268,10 +268,10 @@ void main(){
   // mountain water: clear in the shallows, deep green in the pools; the falls churn the pool milky with bubbles
   // depth below the surface matters, not just path length: deep pools go dark and murky green
   float bedDepth = max(vdepth, 0.0);
-  vec3 absorb = vec3(0.6, 0.17, 0.26) * (1.0 + poolAg * 0.8);
-  vec3 Tr = exp(-absorb * thick * 1.2 - vec3(0.45, 0.22, 0.3) * smoothstep(0.5, 2.5, bedDepth) * bedDepth * 0.5);
+  vec3 absorb = vec3(0.6, 0.215, 0.26) * (1.0 + poolAg * 0.8);
+  vec3 Tr = exp(-absorb * thick * 1.2 - vec3(0.45, 0.27, 0.3) * smoothstep(0.5, 2.5, bedDepth) * bedDepth * 0.5);
   vec3 lightIn = uSkyAmb * 0.9 + uSunColor * uSunIntensity * 0.12 * max(uSunDir.y, 0.0) * (0.4 + 0.6 * sunVis);
-  vec3 scatterCol = mix(vec3(0.02, 0.07, 0.055), vec3(0.12, 0.2, 0.18), poolAg * 0.7) * lightIn;
+  vec3 scatterCol = mix(vec3(0.02, 0.06, 0.055), vec3(0.12, 0.17, 0.18), poolAg * 0.7) * lightIn;
   vec3 body = refr * Tr + scatterCol * (1.0 - Tr);
   // sunlit sediment glow in shallows
   body += vec3(0.06, 0.05, 0.02) * shallow * uSunIntensity * sunVis * 0.05;
@@ -303,7 +303,7 @@ void main(){
   col += sky * 0.35 * rim;
   // thin falling sheet: light passes through as green-gold
   vec3 thinLight = uSkyAmb * 0.8 + uSunColor * uSunIntensity * 0.1 * max(dot(-V, uSunDir) * 0.5 + 0.5, 0.2);
-  col = mix(col, col * 0.7 + vec3(0.07, 0.2, 0.15) * thinLight, curtain * 0.45);
+  col = mix(col, col * 0.7 + vec3(0.07, 0.17, 0.15) * thinLight, curtain * 0.45);
 
   // ---- sun glints ----
   vec3 L = normalize(uSunDir);
@@ -315,7 +315,7 @@ void main(){
 
   // backlit translucency on wave crests / rapids
   float sss = pow(clamp(dot(V, -L + N * 0.5), 0.0, 1.0), 3.0) * (turb + speed * 0.3 + shallow * 0.2);
-  col += vec3(0.1, 0.32, 0.22) * uSunColor * uSunIntensity * sss * sunVis * 0.06;
+  col += vec3(0.1, 0.27, 0.22) * uSunColor * uSunIntensity * sss * sunVis * 0.06;
 
   // ---- foam ----
   float foamAmt = (st.b + turb * 0.45 * (1.0 - u * u)) * (1.0 - brink * 0.9) + foot * 0.45;
@@ -507,11 +507,12 @@ export class Water {
   buildMesh() {
     // z samples: dense around the waterfall
     const zs = [];
-    let z = -260;
-    while (z < 260) {
+    // the water runs on well past the play area, so its far end is lost in the haze rather than seen as an edge
+    let z = -340;
+    while (z < 340) {
       zs.push(z);
       const nearFall = Math.abs(z - (WF_Z + 0.6)) < 2.5;
-      z += nearFall ? 0.08 : (Math.abs(z) < 160 ? 0.4 : 1.2);
+      z += nearFall ? 0.08 : (Math.abs(z) < 160 ? 0.4 : Math.abs(z) < 240 ? 1.2 : 3);
     }
     const cols = 34;
     const pos = [], sim = [], steep = [], nor = [];

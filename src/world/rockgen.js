@@ -235,8 +235,9 @@ export function makeRockMaterial() {
 // round: smooth-min radius (edge rounding); lumps: noise amplitudes; beds/cracks: sandstone grooves, joints.
 const STYLES = {
   round:   { ay: [0.62, 0.85], az: [0.75, 1.0], planes: [3, 6], off: [0.8, 0.95], planeY: 0.7, round: [0.1, 0.16], lumps: [0.07, 0.03, 0.01], beds: 0, cracks: 0.45, crackVert: false, top: false },
-  // the erratic: a big glacial boulder, broad faces split by joints, edges worn round
-  erratic: { ay: [0.7, 0.8], az: [0.8, 0.9], planes: [6, 8], off: [0.74, 0.88], planeY: 0.55, round: [0.08, 0.1], lumps: [0.04, 0.02, 0.008], beds: 0, cracks: 0.9, crackVert: true, top: false },
+  // the erratic: a glacial deposit, a blocky mass of granite plucked from a cliff and carried miles on the ice:
+  // broad joint faces and a flat-ish weathered top, edges rounded by the ice and the ages since
+  erratic: { ay: [0.66, 0.74], az: [0.82, 0.92], planes: [12, 15], off: [0.42, 0.6], planeY: 0.8, round: [0.025, 0.035], lumps: [0.035, 0.02, 0.008], beds: 0, cracks: 1, crackVert: true, top: true },
   angular: { ay: [0.6, 0.8], az: [0.7, 0.95], planes: [5, 8], off: [0.7, 0.9], planeY: 0.6, round: [0.06, 0.09], lumps: [0.05, 0.025, 0.01], beds: 0, cracks: 0.6, crackVert: false, top: false },
   block:   { ay: [0.65, 0.95], az: [0.7, 0.95], planes: [5, 9], off: [0.62, 0.85], planeY: 0.35, round: [0.035, 0.06], lumps: [0.035, 0.02, 0.008], beds: 1, cracks: 0.6, crackVert: true, top: true },
   slab:    { ay: [0.32, 0.45], az: [0.7, 1.0], planes: [5, 8], off: [0.58, 0.82], planeY: 0.15, round: [0.05, 0.08], lumps: [0.03, 0.015, 0.006], beds: 1, cracks: 0.5, crackVert: true, top: true },

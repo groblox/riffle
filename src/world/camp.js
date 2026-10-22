@@ -787,18 +787,19 @@ export class Camp {
       case 'tent': {
         // crawl in and sit at the back, looking out through the open door
         a.audio.play('zip', { x: it.wx, y: it.wy + 0.5, z: it.wz, gain: 0.8 });
-        const eye = it.group.localToWorld(new THREE.Vector3(0.05, 0.72, -0.3));
-        this.sitIn(it, eye, it.group.rotation.y + Math.PI, -0.1);
+        // forward toward the door, and with a wide lens: less canvas, more of the view
+        const eye = it.group.localToWorld(new THREE.Vector3(0.05, 0.72, 0.15));
+        this.sitIn(it, eye, it.group.rotation.y + Math.PI, -0.08, 1.7);
         break;
       }
       default: break;
     }
   }
 
-  sitIn(it, eye, yaw, pitch) {
+  sitIn(it, eye, yaw, pitch, wide = 1) {
     const a = this.app;
     this.seated = it;
-    a.controls.sit(eye, yaw, pitch);
+    a.controls.sit(eye, yaw, pitch, wide);
     const tent = it.id === 'tent';
     const night = U.uNight.value > 0.5;
     a.ui.toast(`<div class="t-n">${tent ? 'In the tent' : 'Sitting by the fire'}</div><div class="t-l">drag or A/D to look around · scroll to look closer${tent && night ? ' · Z to sleep till dawn' : ''} · Esc to get up</div>`, 'small', 4200);

@@ -12,7 +12,7 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0b0a; color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
-canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; outline: none; cursor: default; touch-action: none; }
+canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; cursor: default; touch-action: none; }
 canvas#c.hover { cursor: pointer; }
 canvas#c.grab { cursor: grab; }
 canvas#c.grabbing, canvas#c.grabbing.hover { cursor: grabbing; }
@@ -81,7 +81,9 @@ button { font: inherit; color: inherit; }
 .slider-row { gap: 6px; }
 .slider-row .lbl { padding: 5px; }
 .slider-row .name { font-size: 11.5px; color: var(--ink-dim); width: 40px; }
-.slider-row .val { font-size: 10.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; width: 22px; text-align: right; }
+.slider-row .val { font-size: 10.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; width: 24px; flex: none; text-align: right; }
+.slider-row input[type=range] { min-width: 0; }
+.slider-row .skip { flex: none; padding: 3px; margin: 0 -3px 0 -2px; }
 .sep { height: 1px; background: var(--line); margin: 1px 0; }
 .foot { gap: 6px; }
 .foot .seg button { padding: 5px 4px; }
@@ -177,7 +179,7 @@ kbd { display: inline-block; font-family: var(--sans); font-size: 10.5px; paddin
     radial-gradient(ellipse 34% 24% at 10% 94%, rgba(150, 100, 45, 0.2), rgba(150, 100, 45, 0.07) 60%, transparent 72%),
     radial-gradient(ellipse 30% 25% at 92% 6%, rgba(150, 105, 50, 0.15), transparent 70%),
     radial-gradient(ellipse 120% 110% at 50% 50%, transparent 55%, rgba(140, 95, 40, 0.26) 100%); }
-.page.left { left: 0; border-radius: 4px 0 0 4px; box-shadow: inset -34px 0 44px -18px rgba(70, 40, 15, 0.48), inset 0 0 26px rgba(110, 70, 30, 0.32); padding: 4.2% 5% 3.5% 6%; display: flex; flex-direction: column; }
+.page.left { left: 0; border-radius: 4px 0 0 4px; box-shadow: inset -34px 0 44px -18px rgba(70, 40, 15, 0.48), inset 0 0 26px rgba(110, 70, 30, 0.32); padding: max(4.2%, 20px) 5% 3.5% max(6%, 30px); /* clear of the dog-ear on a small book */ display: flex; flex-direction: column; }
 .page.right { left: 50%; border-radius: 0 4px 4px 0; box-shadow: inset 34px 0 44px -18px rgba(70, 40, 15, 0.48), inset 0 0 26px rgba(110, 70, 30, 0.32); padding: 4% 6% 3.5% 5%; z-index: 1;
   /* a tide line from a long-ago splash, a crease, and a chewed-up bottom corner */
   background-image: radial-gradient(ellipse 22% 15% at 80% 84%, transparent 60%, rgba(130, 80, 30, 0.16) 64%, rgba(130, 80, 30, 0.05) 68%, transparent 74%),
@@ -198,7 +200,7 @@ kbd { display: inline-block; font-family: var(--sans); font-size: 10.5px; paddin
   opacity: 0; transform: translateX(-52px); transition: transform .2s ease, opacity .14s ease; }
 /* the ribbons slide out from between the pages once the book lies open */
 .guide.ready .tabs { opacity: 1; transform: none; transition: transform .45s cubic-bezier(.2,.8,.3,1.12), opacity .2s ease; }
-.tab { position: relative; width: 78px; height: 38px; border: none; cursor: pointer; padding: 0 0 0 30px; text-align: left; border-radius: 0 7px 7px 0; transform: translateX(-26px); transition: transform .25s ease;
+.tab { position: relative; width: 88px; height: 38px; border: none; cursor: pointer; padding: 0 0 0 30px; text-align: left; border-radius: 0 7px 7px 0; transform: translateX(-26px); transition: transform .25s ease;
   font: 600 17px/1 var(--hand); color: #f7e9cd; text-shadow: 0 1px 0 rgba(0,0,0,0.3); box-shadow: 2px 2px 6px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.06), inset -6px 0 8px -4px rgba(0,0,0,0.25);
   background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.32 0 0 0 0 0.22 0 0 0 0 0.1 0 0 0 0.11 0'/></filter><rect width='100%' height='100%' filter='url(%23f)'/></svg>"), linear-gradient(90deg, transparent 70%, rgba(255,240,210,0.1)), var(--tc, #7d4b2a); clip-path: polygon(0 0, 96% 0, 100% 12%, 98.5% 30%, 100% 48%, 98.6% 66%, 100% 84%, 96% 100%, 0 100%); }
 .tab:nth-child(1) { --tc: #4f6a72; } .tab:nth-child(2) { --tc: #7a5b3a; } .tab:nth-child(3) { --tc: #8a6a2e; } .tab:nth-child(4) { --tc: #6e4a36; }
@@ -269,25 +271,209 @@ kbd { display: inline-block; font-family: var(--sans); font-size: 10.5px; paddin
   .folio, .leaf, .strap, .guide.shown .folio, .guide.open .folio, .guide.open .leaf, .guide.unclasp .strap { transition-duration: .01s; transition-delay: 0s; }
   .flip { animation-duration: .01s !important; }
 }
-@media (max-width: 760px) {
-  .folio { width: 92vw; aspect-ratio: auto; height: 84vh; transform: none !important; }
+/* ---------- the folio on a tall, narrow screen (phones upright, tablets upright) ----------
+   The book lies flat: a short page on top holds the title and a strip of thumbnails that scrolls sideways,
+   and the entry fills the page below it. The ribbons hang from its lower edge as a row. Nothing swings, so
+   Folio.setOpen skips the choreography (see `flat` there). */
+@media (orientation: portrait) and (max-width: 900px) {
+  .guide { --strip: 228px; --plate: clamp(108px, 25vh, 280px); }
+  .folio-back { background: radial-gradient(ellipse at center, rgba(12, 8, 5, 0.62), rgba(8, 5, 3, 0.9)); }
+  /* the book and the ribbons under it are centred as one block (hence the negative margin: half of it lifts the book) */
+  .folio { width: min(94vw, 640px); aspect-ratio: auto; height: min(calc(100vh - 160px - env(safe-area-inset-top) - env(safe-area-inset-bottom)), 900px); height: min(calc(100dvh - 160px - env(safe-area-inset-top) - env(safe-area-inset-bottom)), 900px);
+    margin-top: -62px; transform: translateY(18px) !important; transition: transform .38s cubic-bezier(.2,.8,.3,1) !important; }
+  .guide.shown .folio, .guide.open .folio { transform: none !important; }
   .page, .leaf { width: 100%; left: 0 !important; border-radius: 4px; }
-  .leaf { top: 0; bottom: 50%; transform: none !important; }
-  .leaf-out { display: none; }
-  .page.right { top: 50%; bottom: 0; clip-path: none; }
+  .leaf { top: 0; bottom: auto; height: var(--strip); transform: none !important; }
+  .leaf-out, .spine, .flip { display: none; }
   .cover-r { left: -16px; }
-  .spine, .flip { display: none; }
-  .tabs { left: auto; right: -10px; top: 2%; z-index: 5; }
-  .tab { width: 56px; transform: none; padding-left: 8px; }
-  .folio-close { left: auto; right: 0; top: -46px; }
+  .page.left { padding: 26px 6% 6px max(7%, 30px); }
+  .page.right { top: var(--strip); bottom: 0; clip-path: none; border-radius: 4px; padding: 14px 5% 8px; }
+  /* one heading row: the section and how many of it, then how many in all at the far end */
+  .pg-head { position: absolute; top: 28px; right: 6%; padding: 0; border: 0; }
+  .pg-head h2, .pg-sub { display: none; }
+  .pg-count { font-size: 22px; }
+  .pg-cat { justify-content: flex-start; gap: 12px; margin: 0 0 4px; font-size: 27px; }
+  .pg-cat em { font-size: 19px; }
+  .index { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: var(--cw, 92px); gap: 0 8px; align-content: start;
+    overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; padding: 5px 2px 2px; margin: 0 -2px; }
+  .guide .index { touch-action: pan-x; } /* beats the page-wide pan-y for the index */
+  .cell { scroll-snap-align: start; }
+  .cell .cn { font-size: 17px; }
+  .pg-foot { margin-top: 3px; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dogear { width: 30px; height: 30px; }
+  /* the entry: the sketch sized to the height there is, then the words; it scrolls if they don't fit */
+  .entry { overflow-y: auto; scrollbar-width: none; touch-action: pan-y; }
+  .entry::-webkit-scrollbar { display: none; }
+  .plate { margin: 0 2% 8px; padding: 2%; }
+  .plate .big { height: var(--plate); aspect-ratio: auto; }
+  .plate.empty { aspect-ratio: auto; height: calc(var(--plate) + 4%); }
+  .plate.empty .q { font-size: 64px; }
+  .tape { width: 56px; height: 18px; }
+  .entry h3 { font-size: 29px; margin: 2px 2% 0; }
+  .entry .latin { font-size: 16px; margin: 3px 2% 0; }
+  .entry .note { font-size: 20px; line-height: 1.2; margin: 8px 2% 0; }
+  .entry .when { font-size: 17px; margin: 6px 2% 0; }
+  /* the stamp sits on the corner of the plate, where it can't crowd the words */
+  .entry .stamp { top: calc(var(--plate) - 14px); right: 8%; bottom: auto; }
+  .entry.swap-fwd { animation: entryFwd .3s cubic-bezier(.2,.8,.3,1); }
+  .entry.swap-back { animation: entryBack .3s cubic-bezier(.2,.8,.3,1); }
+  @keyframes entryFwd { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
+  @keyframes entryBack { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: none; } }
+  /* ribbons: a scrolling row hanging below the book, fading out at the edge that has more */
+  .tabs { left: 0; right: 0; top: calc(100% + 20px); flex-direction: row; gap: 5px; margin: 0; padding: 0 14px 4px; overflow-x: auto; scrollbar-width: none; touch-action: pan-x; z-index: 5;
+    transform: translateY(-12px); -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 30px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 30px), transparent); }
+  .tabs::-webkit-scrollbar { display: none; }
+  .guide.ready .tabs { transform: none; }
+  .tab { flex: 0 0 auto; width: auto; height: 38px; padding: 0 15px 0 12px; border-radius: 0 0 8px 8px; transform: none !important; font-size: 17px; clip-path: none; }
+  .tab.on { box-shadow: 0 4px 10px rgba(0,0,0,0.45), inset 0 -3px 0 rgba(255, 235, 200, 0.55); }
+  .tab.full::after { right: 3px; top: 2px; font-size: 10px; }
+  .folio-close { left: auto; right: -8px; top: -20px; width: 42px; height: 42px; font-size: 28px; }
 }
+/* short phones: a leaner strip and smaller sketch, so the entry keeps room for its words */
+@media (orientation: portrait) and (max-width: 900px) and (max-height: 720px) {
+  .guide { --strip: 184px; --plate: clamp(92px, 17.5vh, 280px); }
+  .page.left { padding-top: 20px; }
+  .pg-head { top: 22px; }
+  .pg-cat { font-size: 24px; margin-bottom: 1px; }
+  .pg-foot { display: none; }
+  .cell .cn { font-size: 15px; }
+  .page.right { padding-top: 10px; }
+  .plate { margin-bottom: 4px; }
+  .entry h3 { font-size: 25px; }
+  .entry .latin { font-size: 15px; }
+  .entry .note { font-size: 17px; margin-top: 5px; }
+  .entry .when { font-size: 15px; margin-top: 3px; }
+}
+/* a tablet held upright has the room for bigger type and a taller strip */
+@media (orientation: portrait) and (min-width: 600px) and (max-width: 900px) {
+  .guide { --strip: 290px; --plate: clamp(180px, 28vh, 340px); }
+  .cell .cn { font-size: 19px; }
+  .pg-count { font-size: 26px; }
+  .pg-cat { font-size: 31px; }
+  .entry h3 { font-size: 36px; }
+  .entry .latin { font-size: 18px; }
+  .entry .note { font-size: 25px; }
+  .entry .when { font-size: 19px; }
+  .tab { height: 42px; font-size: 19px; padding: 0 18px 0 14px; }
+}
+.guide { z-index: 5; }
+/* touch: the book has the whole screen, so the game's own buttons step aside while it is open */
+body.touch.guide-open .hud > * { opacity: 0 !important; pointer-events: none !important; }
 
 #flash { position: absolute; inset: 0; background: #dfe6ff; opacity: 0; mix-blend-mode: screen; pointer-events: none; }
 
+/* ---------- phones, tablets and other touch screens ---------- */
+/* the edges stay clear of notches and the home bar (index.html asks for the full screen with viewport-fit) */
+.brand { top: calc(20px + env(safe-area-inset-top)); left: calc(24px + env(safe-area-inset-left)); }
+.guide-btn { top: calc(18px + env(safe-area-inset-top)); right: calc(20px + env(safe-area-inset-right)); }
+.dock { right: calc(20px + env(safe-area-inset-right)); bottom: calc(20px + env(safe-area-inset-bottom)); }
+#ui { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#ui button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+/* no page zoom or rubber-banding under a finger; the folio's index still scrolls */
+html, body { overscroll-behavior: none; touch-action: none; }
+.index, .dock-inner { touch-action: pan-y; }
+
+body:not(.touch) .for-touch, body.touch .for-mouse { display: none !important; }
+body.touch .hints-mouse { display: none; }
+.hints-touch, .tray, .tool-chip, .ctx, .unhide { display: none; }
+
+body.touch .hints-touch { display: flex; left: max(calc(70px + env(safe-area-inset-left)), calc(50% - 165px)); right: auto; bottom: calc(132px + env(safe-area-inset-bottom)); width: min(330px, calc(100vw - 86px));
+  padding: 12px 16px 13px; gap: 7px; font-size: 13px; line-height: 1.35; color: var(--ink-dim); text-shadow: none; pointer-events: none; border-radius: 14px; }
+.hints-touch b { color: var(--ink); font-weight: 600; }
+body.touch .hints-touch.faded { opacity: 0; }
+
+/* the tray: skip a stone, plant a flower, float a leaf, whistle, pitch a camp */
+body.touch .tray { display: flex; flex-direction: column; gap: 8px; position: absolute; left: calc(12px + env(safe-area-inset-left)); bottom: calc(16px + env(safe-area-inset-bottom)); pointer-events: auto; }
+.tb { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: var(--ink);
+  background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); box-shadow: 0 6px 22px rgba(0,0,0,0.2); transition: background .2s, color .2s, border-color .2s, transform .15s; }
+.tb svg { width: 22px; height: 22px; }
+.tb:active { transform: scale(0.92); }
+.tb.on { color: var(--accent); border-color: rgba(242, 166, 90, 0.6); background: rgba(60, 38, 20, 0.55); }
+/* what the armed tool does, beside its button (top set from JS) */
+body.touch .tool-chip { display: block; position: absolute; left: calc(68px + env(safe-area-inset-left)); top: 0; transform: translate(-6px, -50%); padding: 8px 13px; font-size: 12.5px; border-radius: 12px; color: var(--ink);
+  opacity: 0; pointer-events: none; transition: opacity .25s ease, transform .25s ease; white-space: nowrap; max-width: calc(100vw - 84px); overflow: hidden; text-overflow: ellipsis; }
+body.touch .tool-chip.on { opacity: 1; transform: translate(0, -50%); pointer-events: auto; }
+/* the context bar: Rotate / Pitch here / Cancel while placing a camp, Get up while sitting */
+body.touch .ctx { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; position: absolute; left: calc(70px + env(safe-area-inset-left)); right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(80px + env(safe-area-inset-bottom)); pointer-events: auto; opacity: 0; transform: translateY(8px); transition: opacity .3s ease, transform .3s ease; }
+body.touch .ctx.on { opacity: 1; transform: none; }
+body.touch .ctx:not(.on) { pointer-events: none; }
+.cb { min-height: 44px; padding: 0 18px; font-size: 14px; letter-spacing: 0.02em; cursor: pointer; border-radius: 999px; }
+.cb.go { color: #1d140c; background: rgba(242, 176, 106, 0.92); border-color: rgba(255, 210, 160, 0.8); font-weight: 600; }
+.cb:active { transform: scale(0.96); }
+/* photo mode hides everything, so a finger needs a way back */
+body.touch .hud.photo .unhide { display: grid; place-items: center; position: absolute; top: calc(14px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); width: 44px; height: 44px; padding: 0; border-radius: 50%; color: var(--ink); opacity: 0.55; pointer-events: auto; cursor: pointer; }
+
+/* finger-sized controls in the dock */
+body.touch .ib { padding: 9px; }
+body.touch .seg button { padding: 10px 4px; }
+body.touch .foot .seg button { padding: 10px 4px; }
+body.touch .dock-inner { gap: 11px; }
+body.touch input[type=range] { height: 32px; }
+body.touch input[type=range]::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: -9.5px; }
+body.touch input[type=range]::-moz-range-thumb { width: 22px; height: 22px; }
+body.touch input.time::-webkit-slider-thumb { margin-top: -9px; }
+body.touch .dock-head .tod-label { padding: 8px 0; font-size: 13px; }
+body.touch .guide-btn { padding: 11px 15px; }
+body.touch .tooltip { font-size: 14px; padding: 7px 12px; text-align: center; white-space: normal; max-width: min(300px, 80vw); }
+body.touch .tooltip .tt-hint { font-size: 11.5px; }
+
 @media (max-width: 700px) {
-  .dock { width: calc(100vw - 32px); right: 16px; bottom: 16px; }
-  .dock.collapsed { width: 176px; }
-  .hints { display: none; }
-  .brand { left: 16px; }
+  .dock { width: calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)); right: calc(16px + env(safe-area-inset-right)); bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 1; }
+  .dock.collapsed { width: 168px; }
+  .hints-mouse { display: none; }
+  .brand { left: calc(16px + env(safe-area-inset-left)); top: calc(16px + env(safe-area-inset-top)); gap: 8px; }
+  .brand .name { font-size: 23px; }
+  .brand .clock, .brand .season { font-size: 12.5px; }
+  .guide-btn { top: calc(13px + env(safe-area-inset-top)); right: calc(14px + env(safe-area-inset-right)); }
   .guide-btn span:not(.count) { display: none; }
+  #toasts { top: calc(64px + env(safe-area-inset-top)); width: calc(100vw - 32px); }
+  .toast { max-width: calc(100vw - 32px); }
+  #discoveries { top: calc(60px + env(safe-area-inset-top)); left: calc(16px + env(safe-area-inset-left)); width: auto; right: calc(16px + env(safe-area-inset-right)); }
+  .toast.discover { max-width: none; }
+  .toast .toast-sk { height: 96px; }
+  /* the open dock is the whole bottom of the screen: the touch buttons step out of its way */
+  .dock:not(.collapsed) ~ .tray, .dock:not(.collapsed) ~ .ctx, .dock:not(.collapsed) ~ .tool-chip, .dock:not(.collapsed) ~ .hints-touch { opacity: 0 !important; pointer-events: none !important; }
 }
+/* phones on their side: little height to spare */
+@media (max-height: 500px) {
+  .toast .toast-sk { display: none; }
+  .t-f { margin-top: 4px; }
+  #discoveries { width: 300px; right: auto; }
+  body.touch #discoveries { left: calc(66px + env(safe-area-inset-left)); }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .tab { height: 31px; width: 90px; font-size: 15px; }
+  .tabs { gap: 3px; top: 5%; }
+  .pg-sub, .pg-foot { display: none; }
+  .page.left { padding-top: 24px; padding-bottom: 8px; }
+  .pg-head h2 { font-size: 22px; }
+  .pg-count { font-size: 18px; }
+  .pg-cat { margin: 6px 0 2px; font-size: 22px; }
+  .pg-cat em { font-size: 16px; }
+  .index { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 10px; }
+  .cell .cn { font-size: 15px; }
+  .entry .stamp { display: none; }
+  body.touch .tray { gap: 6px; bottom: calc(10px + env(safe-area-inset-bottom)); }
+  body.touch .tb { width: 40px; height: 40px; }
+  body.touch .tb svg { width: 20px; height: 20px; }
+  body.touch .ctx { bottom: calc(66px + env(safe-area-inset-bottom)); left: calc(62px + env(safe-area-inset-left)); }
+  body.touch .tool-chip { left: calc(60px + env(safe-area-inset-left)); }
+  body.touch .hints-touch { bottom: calc(70px + env(safe-area-inset-bottom)); }
+  .dock:not(.collapsed) .dock-inner { max-height: calc(100vh - 120px); overflow-y: auto; }
+  .intro-inner { padding: 12px; }
+  .intro h1 { font-size: 56px; margin: 4px 0; }
+  .sub { margin-bottom: 14px; font-size: 16px; }
+  .status { margin: 6px 0 10px; }
+  .keys-intro { margin-top: 14px; }
+  .hp { margin-top: 10px; }
+}
+
+/* ---------- version stamp ---------- */
+.ver { position: fixed; left: calc(8px + env(safe-area-inset-left)); bottom: calc(4px + env(safe-area-inset-bottom)); z-index: 3; font: 10px/1.4 var(--sans); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+.ver-tag { all: unset; cursor: pointer; padding: 2px 4px; color: var(--ink); opacity: 0.22; transition: opacity .2s; text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
+.ver-tag:hover { opacity: 0.7; }
+.ver-notes { position: absolute; left: 0; bottom: 100%; width: max-content; max-width: min(340px, calc(100vw - 24px)); max-height: 40vh; overflow-y: auto; margin-bottom: 4px; padding: 8px 12px; color: var(--ink-dim); background: var(--glass-strong); border: 1px solid var(--line); border-radius: 10px; }
+.ver-notes[hidden] { display: none; }
+.ver-notes p { margin: 0 0 4px; }
+.ver-notes b { color: var(--ink); font-weight: 600; margin-right: 6px; }

@@ -1,7 +1,7 @@
 // The field guide as a worn leather folio: a two-page spread with ribbon tabs per category, an index of
 // pencil-and-wash sketches on the left page and the selected entry's study on the right. It arrives shut,
 // unclasps, and opens like a book (the front cover swings over on the spine); closing runs the other way.
-// Its leaves turn with A / D or the arrow keys.
+// Its leaves turn with A / D or the arrow keys, or a sideways swipe.
 import { GUIDE } from './guide.js';
 import fauna from './sketches/fauna.js';
 import insects from './sketches/insects.js';
@@ -9,6 +9,8 @@ import flora from './sketches/flora.js';
 import fossils from './sketches/fossils.js';
 
 const SKETCH = { ...fauna, ...insects, ...flora, ...fossils };
+// a tall, narrow screen: the book lies flat (see the matching block in style.css), so no leaf swings
+const flat = () => { try { return matchMedia('(orientation: portrait) and (max-width: 900px)').matches; } catch { return false; } };
 const CATS = [
   { id: 'Fish', label: 'Fish' },
   { id: 'Birds', label: 'Birds' },
@@ -74,7 +76,7 @@ export class Folio {
               <div class="pg-sub">Riffle Creek &amp; the canyon country</div>
               <div class="pg-cat"></div>
               <div class="index"></div>
-              <div class="pg-foot"><kbd>A</kbd> <kbd>D</kbd> turn the leaves · click what you find in the world to record it</div>
+              <div class="pg-foot"><span class="for-mouse"><kbd>A</kbd> <kbd>D</kbd> turn the leaves · click what you find in the world to record it</span><span class="for-touch">swipe the page to turn the leaves</span></div>
               <i class="dogear"></i>
             </div>
           </div>
@@ -93,8 +95,19 @@ export class Folio {
       const c = e.target.closest('.cell');
       if (!c || c.dataset.id === this.sel) return;
       const ids = [...this.$('.index').children].map((x) => x.dataset.id);
-      if (c.dataset.id !== this.sel) this.show(c.dataset.id);
+      this.show(c.dataset.id, ids.indexOf(c.dataset.id) > ids.indexOf(this.sel) ? 1 : -1);
     });
+    // a sideways swipe across the book turns its leaves
+    let sw = null;
+    this.folioEl.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch' && !e.target.closest('.tabs, .folio-close')) sw = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+    this.folioEl.addEventListener('pointerup', (e) => {
+      if (!sw || e.pointerType !== 'touch') return;
+      const dx = e.clientX - sw.x, dy = e.clientY - sw.y, quick = performance.now() - sw.t < 600;
+      sw = null;
+      if (quick && this.isOpen() && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) this.step(dx < 0 ? 1 : -1);
+    });
+    this.folioEl.addEventListener('pointercancel', () => { sw = null; });
+    window.addEventListener('resize', () => this.fit());
     this.$('.folio-close').addEventListener('click', () => this.ui.toggleGuide(false));
     this.$('.folio-back').addEventListener('click', () => this.ui.toggleGuide(false));
     // while the book is open it has the keyboard (registered before the camera's listener, so it can
@@ -123,6 +136,15 @@ export class Folio {
     });
   }
 
+  // lying flat, the strip's cells are sized so the last one in view is cut off: a plain sign that it scrolls
+  fit() {
+    const idx = this.$('.index');
+    if (!flat()) { idx.style.removeProperty('--cw'); return; }
+    const W = idx.clientWidth, target = innerWidth >= 600 ? 130 : 92, gap = 8;
+    const k = Math.max(2, Math.floor((W + gap) / (target + gap)));
+    idx.style.setProperty('--cw', idx.children.length <= k ? `${target}px` : `${(W - k * gap) / (k + 0.45)}px`);
+  }
+
   // fully open and readable (not merely on its way)
   isOpen() { return this.el.classList.contains('ready'); }
 
@@ -139,20 +161,21 @@ export class Folio {
     this.timers = [];
     const cl = this.el.classList, sound = (s) => this.ui.cb.bookSound && this.ui.cb.bookSound(s);
     const at = (ms, fn) => this.timers.push(setTimeout(fn, ms));
+    const quick = flat(); // lying flat nothing swings, so there is nothing to wait for
     if (want) {
       this.render();
       let t = 0;
       // the cover comes up in about 0.3 s and is held still for half a second before it opens
-      if (!cl.contains('shown')) { cl.add('shown'); t = 600; }
-      if (!cl.contains('unclasp')) { at(t, () => cl.add('unclasp')); t += 200; }
-      if (!cl.contains('open')) { at(t, () => { cl.add('open'); sound('bookOpen'); }); t += 1050; }
+      if (!cl.contains('shown')) { cl.add('shown'); t = quick ? 0 : 600; }
+      if (!cl.contains('unclasp')) { at(t, () => cl.add('unclasp')); t += quick ? 0 : 200; }
+      if (!cl.contains('open')) { at(t, () => { cl.add('open'); sound('bookOpen'); }); t += quick ? 320 : 1050; }
       at(t, () => cl.add('ready'));
     } else {
       if (this.turning) this.turning.finish();
       cl.remove('ready');
       let t = 0;
-      if (cl.contains('open')) { cl.remove('open'); at(380, () => sound('bookShut')); t = 760; }
-      if (cl.contains('unclasp')) { at(t, () => cl.remove('unclasp')); t += 240; }
+      if (cl.contains('open')) { cl.remove('open'); at(quick ? 0 : 380, () => sound('bookShut')); t = quick ? 200 : 760; }
+      if (cl.contains('unclasp')) { at(t, () => cl.remove('unclasp')); t += quick ? 0 : 240; }
       at(t, () => cl.remove('shown'));
     }
   }
@@ -169,7 +192,7 @@ export class Folio {
   step(dir) {
     const i = ORDER.findIndex((g) => g.id === this.sel);
     const g = ORDER[(i + dir + ORDER.length) % ORDER.length];
-    if (catOf(g).id === this.cat) this.show(g.id);
+    if (catOf(g).id === this.cat) this.show(g.id, dir);
     else this.go(() => { this.sel = g.id; this.cat = catOf(g).id; }, dir);
   }
   stepCat(dir) {
@@ -179,18 +202,26 @@ export class Folio {
   }
 
   // another entry on the same spread: the study on the right page is swapped, with no leaf turned
-  show(id) {
+  show(id, dir = 0) {
     if (this.turning) this.turning.finish();
     this.sel = id;
     this.render();
+    this.swap(dir);
+  }
+
+  // the study on the right page changes: a fade, or (lying flat) a short slide the way the page was moved
+  swap(dir = 0) {
     const entry = this.$('.entry');
-    entry.classList.remove('swap'); void entry.offsetWidth; entry.classList.add('swap');
+    entry.classList.remove('swap', 'swap-fwd', 'swap-back'); void entry.offsetWidth;
+    entry.classList.add(flat() && dir ? (dir > 0 ? 'swap-fwd' : 'swap-back') : 'swap');
+    entry.scrollTop = 0;
   }
 
   // turn a leaf: forward, the old right page lifts off and swings over the spine; back, a leaf swings
   // in from the left carrying the earlier page
   go(change, dir) {
     if (this.turning) { this.turning.finish(); }
+    if (flat()) { change(); this.render(); this.swap(dir); this.ui.cb.pageSound && this.ui.cb.pageSound(); return; }
     const entry = this.$('.entry');
     const oldHTML = entry.innerHTML;
     change();
@@ -234,7 +265,7 @@ export class Folio {
       <div class="stamp">${g.cat}</div>` : `
       <div class="plate empty"><div class="q">?</div></div>
       <h3 class="unk">${g.heard ? 'A sound of the canyon' : 'Not yet recorded'}</h3>
-      <p class="note dim">${g.heard ? 'Something out there calls at certain hours. Listen, and note it down when you hear it.' : 'Somewhere along the creek. Keep your eyes open and click what you find.'}</p>`;
+      <p class="note dim">${g.heard ? 'Something out there calls at certain hours. Listen, and note it down when you hear it.' : 'Somewhere along the creek. Keep your eyes open and ' + (this.ui.touch ? 'tap' : 'click') + ' what you find.'}</p>`;
   }
 
   render(_turn, keepEntry) {
@@ -249,10 +280,14 @@ export class Folio {
       b.classList.toggle('full', f === n.length);
       b.title = `${c.label}: ${f} of ${n.length}`;
     });
+    // the ribbons scroll sideways when they don't all fit: keep the open one in view
+    const tabs = this.$('.tabs'), on = tabs.querySelector('.on');
+    if (on && tabs.scrollWidth > tabs.clientWidth + 1) tabs.scrollTo({ left: on.offsetLeft - (tabs.clientWidth - on.offsetWidth) / 2, behavior: this.isOpen() ? 'smooth' : 'auto' });
     const nf = list.filter((g) => found.has(g.id)).length;
     this.$('.pg-cat').innerHTML = `<span>${cat.label}</span><em>${nf} / ${list.length}</em>`;
     if (!this.sel || !list.some((g) => g.id === this.sel)) this.sel = (list.find((g) => found.has(g.id)) || list[0]).id;
-    this.$('.index').innerHTML = list.map((g, i) => {
+    const idx = this.$('.index'), keep = idx.dataset.cat === this.cat ? idx.scrollLeft : 0;
+    idx.innerHTML = list.map((g, i) => {
       const f = found.has(g.id);
       const tilt = ((i * 37) % 7 - 3) * 0.5;
       return `<button class="cell ${f ? 'found' : ''} ${g.id === this.sel ? 'sel' : ''}" data-id="${g.id}" style="--tilt:${tilt}deg">
@@ -260,6 +295,16 @@ export class Folio {
         <span class="cn">${f ? g.name : g.heard ? 'listen…' : '· · ·'}</span>
       </button>`;
     }).join('');
+    // lying flat the index is a strip that scrolls sideways: it stays where it was, and the chosen one is kept in view
+    idx.dataset.cat = this.cat;
+    this.fit();
+    idx.scrollLeft = keep;
+    const sel = idx.querySelector('.sel');
+    if (sel && idx.scrollWidth > idx.clientWidth + 1) {
+      const a = sel.getBoundingClientRect(), b = idx.getBoundingClientRect();
+      if (a.left < b.left + 4) idx.scrollLeft += a.left - b.left - 10;
+      else if (a.right > b.right - 4) idx.scrollLeft += a.right - b.right + 10;
+    }
     if (!keepEntry) this.$('.entry').innerHTML = this.entryHTML(GUIDE.find((e) => e.id === this.sel));
   }
 }

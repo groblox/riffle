@@ -260,9 +260,9 @@ function heronWing(arm, hand, armCol, edgeCol, tipCol) {
 }
 
 export class Heron {
-  constructor(scene, ctx) {
+  constructor(scene, ctx, seed = 2468, startZ = 66) {
     this.ctx = ctx;
-    const rng = this.rng = new RNG(2468);
+    const rng = this.rng = new RNG(seed);
     const blue = [0.32, 0.38, 0.46], light = [0.62, 0.66, 0.7], white = [0.85, 0.86, 0.84], yellow = [0.85, 0.65, 0.2], dark = [0.08, 0.08, 0.1];
     const leg = [0.35, 0.28, 0.2];
     // body (origin at the feet; the rig pivots it about its middle)
@@ -340,7 +340,7 @@ export class Heron {
         if (dep > 0.08 && dep < 0.32 && Math.abs(z - WF_Z) > 8) this.spots.push({ x, z, s });
       }
     }
-    const s = this.spots.reduce((a, b) => (Math.abs(b.z - 66) < Math.abs(a.z - 66) ? b : a), this.spots[0]);
+    const s = this.spots.reduce((a, b) => (Math.abs(b.z - startZ) < Math.abs(a.z - startZ) ? b : a), this.spots[0]);
     this.x = s.x; this.z = s.z; this.y = groundAt(s.x, s.z);
     this.heading = Math.PI * 0.7; this.state = 'stand'; this.timer = 5; this.strike = 0; this.step = 0;
     this.phase = 0; this.amp = 0; this.bank = 0;

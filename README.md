@@ -63,6 +63,7 @@ On Windows you can just double-click **`Launch Riffle.bat`**. It installs depend
 | Input | Action |
 |---|---|
 | **C** | pitch a camp: a ghost follows the cursor, green where the ground is flat and dry, and snaps onto the marked campsites. Click to pitch, **R** rotates, **Esc** cancels, **C** again moves it, **X** packs it up |
+| **V** | fly to the nearest campsite (your own camp first once it's pitched); press again for the next one |
 | **Click a chair or the tent** | sit down or crawl in, then drag or use **A D Q E W S** to look around. **Z** in the tent at night sleeps until dawn; **Esc** gets up |
 
 **Everything else**
@@ -75,7 +76,21 @@ On Windows you can just double-click **`Launch Riffle.bat`**. It installs depend
 | **M** / **N** | mute everything / music on or off |
 | **?** | hints |
 
-The panel in the lower right sets the time of day, weather (clear, cloudy, rain), season (summer, autumn, winter), wind, sound and music levels, and graphics quality. Its arrow folds it down to just the clock, and your settings are remembered.
+**On a phone or tablet**
+
+| Gesture | Action |
+|---|---|
+| **Drag** | wander (the land moves with your finger and glides a little when you let go) |
+| **Pinch** | zoom |
+| **Two fingers** | drag sideways or twist to orbit, drag up or down to tilt |
+| **Tap** | the same as a click; the name of whatever you tapped shows for a moment |
+| **Hold, then drag** | carry a small stone, or trail your hand through the water. Holding still shows what's under your finger |
+| **Buttons at the left** | skip a stone, plant a flower, float a leaf (tap one, then tap where), whistle, pitch a camp, fly to a campsite |
+| **Swipe** in the field guide | turn to the next or previous entry (the thumbnail strip above scrolls sideways; the ribbons below it switch sections) |
+
+While pitching a camp, tap to move the ghost and use the **Rotate / Pitch here / Cancel** buttons. Sitting down brings up **Get up** (and **Sleep till dawn** in the tent at night). In photo mode, the faint eye at the top right brings the interface back. Phones and tablets start on Low quality, and the view widens when the phone is held upright.
+
+The panel in the lower right sets the time of day, weather (clear, cloudy, rain), season (summer, autumn, winter), wind, the sound, creek and music levels (with a button to skip to the next piece of music), and graphics quality. Its arrow folds it down to just the clock, and your settings are remembered.
 
 **Quality:** High is the default and is tuned to keep a current high-end GPU busy (8K shadow map, full-resolution reflections, SSAO, dense grass). If the first few seconds run below about 32 fps, it drops to Low automatically. Ultra is there if you have headroom.
 

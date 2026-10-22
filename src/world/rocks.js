@@ -60,9 +60,7 @@ export function layoutRocks(seed = 9) {
     const along = Math.atan(streamSlope(WF_Z)); // joint faces square to the flow
     // [lateral m, radius, top above the lip water, z offset, moss]
     const lip = [
-      [-1.5, 1.45, 0.62, 0.0, 0.18],   // the left block of the cleft
-      [1.85, 1.45, 0.72, 0.05, 0.14],  // the right one
-      [-3.85, 0.9, 0.4, 0.0, 0.22],    // a shoulder block leaving a slot for the thin strand
+      // (nothing sits across the brink itself: no row of blocks reading as stepping stones over the falls)
       [-4.9, 1.5, 0.95, 0.4, 0.12],    // the band running on into the banks
       [4.7, 1.4, 0.85, 0.35, 0.12],
     ];
@@ -233,9 +231,9 @@ export function layoutRocks(seed = 9) {
     const E = ERRATIC, g = groundAt(E.x, E.z);
     // bedded down to the lowest ground round its foot, so it never stands proud on its downhill side
     let gmin = g;
-    for (let a = 0; a < 6.28; a += 0.3) gmin = Math.min(gmin, groundAt(E.x + Math.cos(a) * E.r * 0.8, E.z + Math.sin(a) * E.r * 0.8));
-    const p = add({ x: E.x, z: E.z, y: Math.min(g - E.h * 0.16, gmin - 0.35), r: E.r, h: E.h, rot: 0.7, kind: 1, moss: 0.22, big: true, fixed: true, house: true, tint: [1.14, 1.06, 1.0] });
-    for (const [a, d, r, hk] of [[0.4, 1.02, 1.5, 0.7], [2.1, 1.05, 1.1, 0.8], [3.3, 1.0, 1.8, 0.55], [4.6, 1.04, 0.9, 0.8], [5.5, 1.08, 0.6, 0.7]]) {
+    for (let a = 0; a < 6.28; a += 0.3) for (const d of [0.7, 0.9, 1.05]) gmin = Math.min(gmin, groundAt(E.x + Math.cos(a) * E.r * d, E.z + Math.sin(a) * E.r * d));
+    const p = add({ x: E.x, z: E.z, y: Math.min(g - E.h * 0.16, gmin - 1.6), r: E.r, h: E.h, rot: 0.7, kind: 1, moss: 0.34, big: true, fixed: true, house: true, tint: [1.14, 1.06, 1.0] });
+    for (const [a, d, r, hk] of [[0.4, 1.0, 3.0, 0.7], [2.1, 1.02, 2.2, 0.8], [3.3, 0.98, 3.6, 0.55], [4.6, 1.02, 1.8, 0.8], [5.5, 1.05, 1.2, 0.7], [1.2, 1.12, 0.8, 0.7], [2.9, 1.1, 1.0, 0.6]]) {
       const x = E.x + Math.cos(a) * E.r * d, z = E.z + Math.sin(a) * E.r * d, gg = groundAt(x, z);
       add({ x, z, y: gg - r * hk * 0.3, r, h: r * hk, rot: rng.range(0, 6.28), kind: 1, moss: p.moss * 0.8, big: r > 1.3, house: true });
     }
@@ -376,7 +374,7 @@ export class Rocks {
     defs.forEach((d, i) => { if (!d.house) (byStyle[d.style] = byStyle[d.style] || []).push(i); });
     const LODS = [5, 4, 3];
     const variants = [];
-    defs.forEach((d, vi) => LODS.forEach((det, li) => variants.push({ vi, li, style: d.style, geo: makeRockGeometry(d.seed, d.style, det) })));
+    defs.forEach((d, vi) => LODS.forEach((det, li) => variants.push({ vi, li, style: d.style, geo: makeRockGeometry(d.seed, d.style, d.house ? [18, 10, 4][li] : det) })));
     this.variants = variants;
     const lodOf = (rk) => (rk.r >= 1.3 || rk.sill ? 0 : rk.r >= 0.45 ? 1 : 2);
     // assign rocks to variants

@@ -21,6 +21,7 @@ import { Camp } from './world/camp.js';
 import { Fossils } from './world/fossils.js';
 import { AudioEngine } from './audio/audio.js';
 import { UI } from './ui/ui.js';
+import { mountVersion } from './version.js';
 import * as shapeModule from './world/shape.js';
 import { smoothstep, clamp } from './noise.js';
 import { WF_Z, WF_LEN, streamCenter, waterLevel, groundAt, streamTurb, streamHalfW } from './world/shape.js';
@@ -60,6 +61,7 @@ const app = { scene, overlay, camera, renderer, canvas, audio, U, pointerInside:
 window.__riffle = app;
 app.shape = shapeModule;
 
+mountVersion();
 const ui = new UI(document.getElementById('ui'), {
   setTime: (t) => { app.sky.time = t; },
   togglePause: () => { app.sky.paused = !app.sky.paused; ui.setPaused(app.sky.paused); },
@@ -72,6 +74,13 @@ const ui = new UI(document.getElementById('ui'), {
   setWind: (v) => { app.windUser = v; app.windBase = v; },
   setVolume: (v) => audio.setVolume(v),
   setMusicVolume: (v) => audio.setMusicVolume(v),
+  setWaterVolume: (v) => audio.setWaterVolume(v),
+  skipMusic: () => {
+    if (!audio.ready) return;
+    if (!audio.musicOn) { audio.setMusic(true); ui.setMusic(true); }
+    const title = audio.skipTrack();
+    if (title) ui.toast(`<span class="em">♪</span> ${title}`, '', 2600);
+  },
   toggleMute: () => { audio.setMuted(!audio.muted); ui.setMuted(audio.muted); },
   toggleMusic: () => { audio.setMusic(!audio.musicOn); ui.setMusic(audio.musicOn); },
   setQuality: (q) => app.setQuality(q),
@@ -79,8 +88,29 @@ const ui = new UI(document.getElementById('ui'), {
   bookSound: (name) => audio.play(name, { gain: 0.8, wet: 0.04 }),
   setControls: (on) => { const c = app.controls; if (!c) return; c.enabled = on; c.keys.clear(); c.velocity.set(0, 0, 0); },
   toggleCamp: () => app.camp && app.camp.toggle(),
+  visitCamp: () => app.visitCamp(),
+  setTool: (t) => app.interact && app.interact.setTool(t),
+  whistle: () => app.interact && app.interact.whistle(),
 });
 app.ui = ui;
+
+// fly to a campsite: the nearest first, then on round the others in turn (your own camp leads the list once it's pitched)
+let campStop = null;
+app.visitCamp = () => {
+  const c = app.controls;
+  if (!c || c.seat || !c.enabled) return;
+  const sites = [...shapeModule.CAMPSITES];
+  const mine = app.camp && app.camp.placed;
+  if (mine) sites.unshift({ name: 'Your camp', x: mine.x, z: mine.z, r: 5, mine: true });
+  const t = c.target, d = (s) => Math.hypot(s.x - t.x, s.z - t.z);
+  let i;
+  if (campStop !== null && campStop < sites.length && d(sites[campStop]) < 14) i = (campStop + 1) % sites.length;
+  else { i = 0; sites.forEach((s, k) => { if (d(s) < d(sites[i])) i = k; }); if (d(sites[i]) < 6 && sites.length > 1) i = (i + 1) % sites.length; }
+  campStop = i;
+  const s = sites[i];
+  c.flyTo(s.x, s.z, s.mine ? 12 : 20);
+  ui.toast(`<div class="t-n">${s.name}</div><div class="t-l">${s.mine ? 'your camp' : 'a level campsite'} · V for the next one</div>`, 'small', 2600);
+};
 
 async function boot() {
   ui.setProgress(0.05, 'Weaving noise…');
@@ -96,7 +126,8 @@ async function boot() {
   app.sky = new Sky(scene);
   ui.setProgress(0.45, 'Growing aspens and grass…');
   await tick();
-  const qIdx = params.has('q') ? parseInt(params.get('q'), 10) : 1;
+  // phones and tablets start on Low (High is tuned for a desktop graphics card)
+  const qIdx = params.has('q') ? parseInt(params.get('q'), 10) : ui.touch ? 0 : 1;
   app.quality = QUALITY[qIdx];
   // grass is built at full (High) density; lower presets draw a fraction of each chunk
   app.veg = new Vegetation(scene, rockData, 1, 1.6);
@@ -119,16 +150,16 @@ async function boot() {
   const ctx = { water: app.water, parts: app.parts, audio, onEvent: null };
   app.fish = new Fishes(scene, ctx, 26);
   app.butterflies = new Butterflies(scene, ctx, app.veg.flowers, 16);
-  app.dragonflies = new Dragonflies(scene, ctx, 10);
-  app.ravens = new Ravens(scene, ctx, 3);
+  app.dragonflies = new Dragonflies(scene, ctx, 15);
+  app.ravens = new Ravens(scene, ctx, 2);
   app.dippers = new Dippers(scene, ctx, rockData, 3);
-  app.heron = new Heron(scene, ctx);
+  app.herons = [new Heron(scene, ctx, 2468, 66), new Heron(scene, ctx, 1357, -8)];
   app.chipmunks = new Chipmunks(scene, ctx, 8);
   app.lizards = new Lizards(scene, ctx, rockData, 7);
   app.frogs = new Frogs(scene, ctx, 8);
   app.hoppers = new Grasshoppers(scene, ctx);
   app.under = new UnderRock(scene, ctx);
-  app.critterList = [app.fish, app.butterflies, app.dragonflies, app.ravens, app.dippers, app.heron, app.chipmunks, app.lizards, app.frogs, app.under];
+  app.critterList = [app.fish, app.butterflies, app.dragonflies, app.ravens, app.dippers, ...app.herons, app.chipmunks, app.lizards, app.frogs, app.under];
 
   app.pipeline = new Pipeline(renderer);
   app.controls = new Controls(camera, canvas);
@@ -155,8 +186,12 @@ async function boot() {
   if (params.has('season')) { app.seasonTarget = U.uSeason.value = parseFloat(params.get('season')); }
   if (params.has('rain')) { app.sky.rainTarget = U.uRain.value = 1; app.sky.cloudTarget = U.uCloud.value = 0.95; }
 
-  canvas.addEventListener('pointerenter', () => { app.pointerInside = true; });
-  canvas.addEventListener('pointerleave', () => { app.pointerInside = false; });
+  // (a finger "leaves" every time it lifts; touch tracks its own presence in Controls)
+  canvas.addEventListener('pointerenter', (e) => { if (e.pointerType !== 'touch') app.pointerInside = true; });
+  canvas.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') app.pointerInside = false; });
+  c.onTouchMode = (on) => ui.setTouch(on);
+  canvas.addEventListener('pointerup', (e) => { if (e.pointerType === 'touch') ui.touched(); });
+  if (ui.touch) c.touch = true;
 
   function resize() {
     const q = app.quality;
@@ -166,7 +201,7 @@ async function boot() {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
     canvas.width = w; canvas.height = h;
     renderer.setViewport(0, 0, w, h);
-    camera.aspect = w / h; camera.updateProjectionMatrix();
+    camera.aspect = w / h; c.setAspect(w / h); camera.updateProjectionMatrix();
     app.pipeline.setSize(w, h, q.msaa);
     app.water.setSize(w, h);
     app.height = h;
@@ -198,6 +233,19 @@ async function boot() {
     if (e.code === 'Slash') ui.toggleHints();
     if (e.code === 'Escape') ui.toggleGuide(false);
   });
+
+  // the touch context bar: on-screen stand-ins for R, Esc, X and Z while pitching a camp or sitting
+  function syncContext() {
+    const cp = app.camp;
+    if (cp.placing) {
+      const b = [['Rotate', () => cp.rotate()], ['Pitch here', () => cp.confirm(), 'go'], ['Cancel', () => cp.cancel()]];
+      if (cp.prev) b.push(['Pack up', () => cp.packUp()]);
+      ui.setContext(`place${!!cp.prev}`, b);
+    } else if (cp.seated) {
+      const tentNight = cp.seated.id === 'tent' && U.uNight.value > 0.5;
+      ui.setContext(`seat${tentNight}`, tentNight ? [['Sleep till dawn', () => cp.sleep(), 'go'], ['Get up', () => cp.getUp()]] : [['Get up', () => cp.getUp()]]);
+    } else ui.setContext('', []);
+  }
 
   // ---- intro: slow cinematic orbit until the player enters ----
   let entered = false;
@@ -255,7 +303,7 @@ async function boot() {
     // fireflies at night, midges by day near water
     const night = U.uNight.value;
     if (night > 0.5 && U.uSeason.value < 1.5 && U.uRain.value < 0.3) {
-      acc.fly += dt * 4 * night;
+      acc.fly += dt * 3 * night;
       while (acc.fly > 1) {
         acc.fly -= 1;
         const x = f.x + (Math.random() - 0.5) * 60, z = f.z + (Math.random() - 0.5) * 60;
@@ -358,13 +406,14 @@ async function boot() {
     app.dragonflies.update(dt);
     app.ravens.update(dt);
     app.dippers.update(dt);
-    app.heron.update(dt, camera.position);
+    for (const h of app.herons) h.update(dt, camera.position);
     app.chipmunks.update(dt, cur);
     app.lizards.update(dt, cur);
     app.frogs.update(dt, cur);
     app.hoppers.update(dt);
     app.under.update(dt);
     app.camp.update(dt);
+    syncContext();
     app.fossils.update(dt);
     ambientFx(dt);
     app.leaves.update(dt);

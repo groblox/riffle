@@ -372,8 +372,8 @@ export function campsiteAt(x, z, pad = 0) {
   return null;
 }
 
-// The house-sized granite erratic in the meadow west of the crossing (rocks.js builds it)
-export const ERRATIC = { x: -19, z: 25, r: 5.2, h: 6.2 };
+// The granite erratic in the meadow west of the crossing: a glacial deposit twice the size of a house (rocks.js builds it)
+export const ERRATIC = { x: -24, z: 29, r: 10.4, h: 12.4 };
 
 const _trn = { d: 0, y: 0, s: 0, x: 0, z: 0 };
 export function terrainSample(x, z, bio = _bio) {
@@ -405,7 +405,7 @@ export function farHeight(x, z) {
   const m = S(175, 760, r);
   if (m <= 0) return h;
   const c = streamCenter(clamp(z, PZ0, PZ1));
-  const valley = 1 - (1 - S(25, 170, Math.abs(x - c))) * S(120, 260, Math.abs(z));
+  const valley = 1 - (1 - S(30, 380, Math.abs(x - c))) * S(120, 260, Math.abs(z));
   // domain warp for organic ranges
   const wx = x + 160 * noiseC.fbm2(x * 0.0012, z * 0.0012, 3);
   const wz = z + 160 * noiseC.fbm2(x * 0.0012 + 7.3, z * 0.0012 - 2.1, 3);

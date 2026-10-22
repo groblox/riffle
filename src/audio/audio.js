@@ -1,6 +1,6 @@
-// WebAudio soundscape. Mostly synthesized; a few recorded sounds (public/audio/sfx: the creek's bed, stones,
-// the folio's leather and paper) are layered in once they've loaded, with the synthesized versions standing in
-// until then. The music is a playlist of recorded flute (public/audio/music), streamed.
+// WebAudio soundscape. Recorded sounds (public/audio/sfx: the creek's bed, stones, thuds, the fire, the folio's
+// leather and paper, and the animal calls) play once they've loaded, with the synthesized versions standing in
+// until then; the rest is synthesized. The music is a playlist of recorded flute (public/audio/music), streamed.
 import { clamp, smoothstep, lerp } from '../noise.js';
 import { streamCenter, waterLevel, streamHalfW, lateral, WF_Z, bioAt } from '../world/shape.js';
 
@@ -11,8 +11,9 @@ export class AudioEngine {
     this.ctx = null;
     this.ready = false;
     this.listener = { x: 0, y: 0, z: 0, rx: 1, rz: 0, fx: 0, fz: -1 };
-    this.volume = 0.9;      // effects and ambience
+    this.volume = 0.9;      // effects and ambience (wind, rain, fire, birds), not the creek
     this.musicVolume = 0.3;
+    this.waterVolume = 0.9; // the creek and falls, on their own level
     this.musicOn = true;
     this.muted = false;
     this.timers = {};
@@ -36,6 +37,9 @@ export class AudioEngine {
     this.reverb.connect(this.reverbGain).connect(this.master);
     this.sfx = ctx.createGain(); this.sfx.gain.value = 1; this.sfx.connect(this.master);
     this.ambBus = ctx.createGain(); this.ambBus.gain.value = 1; this.ambBus.connect(this.master);
+    // every voice of the running water (bubbles, bed recording, falls) goes through here, so it has its own level,
+    // independent of the effects level
+    this.waterBus = ctx.createGain(); this.waterBus.gain.value = this.waterVolume; this.waterBus.connect(this.master);
     this.musicBus = ctx.createGain(); this.musicBus.gain.value = 0.0; this.musicBus.connect(this.master);
     // the recordings carry their own room; just a breath of the canyon on top
     const musicVerb = ctx.createGain(); musicVerb.gain.value = 0.12; this.musicBus.connect(musicVerb).connect(this.reverb);
@@ -57,6 +61,10 @@ export class AudioEngine {
     if (this.ready) for (const b of [this.sfx, this.ambBus]) b.gain.setTargetAtTime(v, this.ctx.currentTime, 0.1);
   }
   setMusicVolume(v) { this.musicVolume = v; }
+  setWaterVolume(v) {
+    this.waterVolume = v;
+    if (this.ready) this.waterBus.gain.setTargetAtTime(v, this.ctx.currentTime, 0.1);
+  }
   setMuted(m) { this.muted = m; if (this.ready) this.master.gain.setTargetAtTime(m ? 0 : 1, this.ctx.currentTime, 0.15); }
   setMusic(on) { this.musicOn = on; }
 
@@ -101,8 +109,11 @@ export class AudioEngine {
     this.samples = {};
     const base = `${import.meta.env.BASE_URL}audio/sfx/`;
     const files = {
-      creek: ['creek-1', 'creek-2'], rocks: ['river-rocks-1', 'river-rocks-2'], large: ['large-rocks-1', 'large-rocks-2'],
+      creek: ['creek-1', 'creek-2'], rocks: ['river-rocks-1', 'river-rocks-2'], large: ['large-rocks-1'],
       folioOpen: ['folio-open'], page: ['page-turn'],
+      thudS: ['thud-small-1', 'thud-small-2'], thudL: ['thud-large-1', 'thud-large-2'], stoke: ['stoke-1', 'stoke-2'],
+      raven: ['raven-1', 'raven-2'], frogTrill: ['frog-trill'], frogEep: ['frog-eep'], whistle: ['whistle'],
+      wren: ['wren'], chickadee: ['chickadee'], woodpecker: ['woodpecker'], owl: ['owl-toot'], coyote: ['coyote'],
     };
     for (const [key, names] of Object.entries(files)) {
       Promise.all(names.map((n) => fetch(base + n + '.mp3').then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
@@ -143,7 +154,8 @@ export class AudioEngine {
     const sm = set[Math.floor(Math.random() * set.length)];
     if (!sm.hits.length) return false;
     const h = sm.hits[Math.floor(Math.random() * sm.hits.length)];
-    const rate = clamp(Math.pow(key === 'large' ? 1 / size : 0.5 / Math.max(size, 0.15), 0.35), 0.7, 1.35) * rand(0.95, 1.05);
+    // the large recording is one pair of boulders; the bigger the stone, the further it's dropped in pitch
+    const rate = (key === 'large' ? clamp(Math.pow(0.9 / size, 0.75), 0.4, 1.05) : clamp(Math.pow(0.5 / Math.max(size, 0.15), 0.35), 0.7, 1.35)) * rand(0.95, 1.05);
     this.sample(key, dest, t, { pick: sm, from: Math.max(0, h.t - 0.006), dur, rate, gain: gain / Math.max(0.4, h.a), fade: dur * 0.4 });
     return true;
   }
@@ -164,6 +176,14 @@ export class AudioEngine {
     g.connect(p).connect(bus);
     if (wet > 0) { const w = ctx.createGain(); w.gain.value = wet; p.connect(w).connect(this.reverb); }
     return g;
+  }
+  // a recording at a spot in the world (placed and attenuated like the synthesized calls); false if it hasn't loaded
+  voice(key, x, y, z, { ref = 25, roll = 0.9, gain = 1, wet = 0.4, rate = 1, delay = 0, from, dur, fade = 0.1, pick } = {}) {
+    if (!this.samples || !this.samples[key]) return false;
+    const sp = this.spatial(x, y, z, ref, roll);
+    const out = this.out(sp.pan, gain * sp.g, wet);
+    this.sample(key, out, this.ctx.currentTime + 0.05 + delay, { rate, from, dur, fade, pick });
+    return true;
   }
   noiseSrc(buf = this.white, rate = 1) {
     const s = this.ctx.createBufferSource(); s.buffer = buf; s.loop = true; s.playbackRate.value = rate;
@@ -300,6 +320,9 @@ export class AudioEngine {
         break;
       }
       case 'thud': {
+        // recorded: small stones and dirt for little things, a heavy rock impact for big ones
+        const key = size > 0.7 && this.samples.thudL ? 'thudL' : 'thudS';
+        if (this.sample(key, out, t, { rate: clamp(Math.pow(0.6 / size, 0.3), 0.75, 1.3) * rand(0.95, 1.05), gain: 0.85, fade: 0.2 })) break;
         // knocking on something too heavy to ring: low, dead modes and a gritty tail
         const k = 1 / Math.sqrt(clamp(size, 0.25, 4));
         this.modes(out, t, [[rand(110, 150) * k, 0.045, 0.5], [rand(260, 330) * k, 0.025, 0.25], [rand(800, 1000) * k, 0.008, 0.14]]);
@@ -349,13 +372,16 @@ export class AudioEngine {
       }
       case 'pop': this.tone(out, 'sine', 500, 900, t, 0.06, 0.15); break;
       case 'hopper': for (let i = 0; i < 10; i++) this.burst(out, t + i * 0.035, 0.012, 0.2, 'bandpass', 6500, 4); break;
-      case 'frogeep': this.tone(out, 'sine', 1400, 2600, t, 0.07, 0.15); break;
+      case 'frogeep': if (!this.sample('frogEep', out, t, { rate: rand(0.92, 1.1), gain: 0.8, fade: 0.1 })) this.tone(out, 'sine', 1400, 2600, t, 0.07, 0.15); break;
       case 'chorusfrog': {
+        if (this.sample('frogTrill', out, t, { rate: rand(0.94, 1.08), gain: 0.7, fade: 0.3 })) break;
         const n = 14; const f0 = rand(1900, 2300);
         for (let i = 0; i < n; i++) this.burst(out, t + i * 0.035, 0.02, 0.25, 'bandpass', f0 + i * 60, 6);
         break;
       }
       case 'raven': {
+        // rook caws dropped in pitch for a raven's depth
+        if (this.sample('raven', out, t, { rate: rand(0.76, 0.88), gain: 0.7, fade: 0.25 })) { this.heard('raven'); break; }
         const n = Math.random() < 0.5 ? 2 : 3;
         for (let i = 0; i < n; i++) {
           const tt = t + i * rand(0.38, 0.5);
@@ -381,7 +407,13 @@ export class AudioEngine {
         break;
       }
       case 'whistle': {
-        // player's bird call: two-note whistle
+        // player's bird call: a whistled note and a lower answer to it
+        if (this.samples.whistle) {
+          const r = rand(0.97, 1.06);
+          this.sample('whistle', out, t, { rate: r, gain: 0.8, fade: 0.1 });
+          this.sample('whistle', out, t + 0.62, { rate: r * 0.82, gain: 0.7, fade: 0.1 });
+          break;
+        }
         this.tone(out, 'sine', 1900, 2050, t, 0.32, 0.18, 0.04);
         this.tone(out, 'sine', 1500, 1450, t + 0.42, 0.4, 0.16, 0.04);
         break;
@@ -398,8 +430,9 @@ export class AudioEngine {
       }
       case 'tick': this.burst(out, t, 0.02, 0.15, 'bandpass', 2400, 3); break;
       case 'stoke': {
-        // fresh air into the fire: a soft whoosh, then a flurry of crackles
+        // fresh air into the fire: a soft whoosh, then a flurry of crackles (recorded, under a low whoosh)
         this.burst(out, t, 0.75, 0.32, 'lowpass', 260, 0.7, 1300, this.pink);
+        if (this.sample('stoke', out, t + 0.12, { rate: rand(0.95, 1.05), gain: 0.75, fade: 0.5 })) break;
         for (let i = 0; i < 16; i++) this.burst(out, t + rand(0.05, 1.1), rand(0.004, 0.014), rand(0.08, 0.35), 'bandpass', rand(1500, 5200), rand(1.5, 4));
         break;
       }
@@ -441,6 +474,7 @@ export class AudioEngine {
 
   // ---- songs (scheduled by update) ----
   canyonWren(x, y, z) {
+    if (this.voice('wren', x, y, z, { ref: 30, roll: 0.8, gain: 0.55, wet: 0.7, rate: rand(0.95, 1.06) })) { this.heard('canyonwren'); return; }
     const sp = this.spatial(x, y, z, 30, 0.8);
     const out = this.out(sp.pan, 0.9 * sp.g, 0.7);
     const t0 = this.ctx.currentTime + 0.05;
@@ -458,6 +492,7 @@ export class AudioEngine {
     this.heard('canyonwren');
   }
   chickadee(x, y, z) {
+    if (this.voice('chickadee', x, y, z, { ref: 25, roll: 0.9, gain: 0.5, wet: 0.35, rate: rand(0.97, 1.1) })) { this.heard('chickadee'); return; }
     const sp = this.spatial(x, y, z, 25, 0.9);
     const out = this.out(sp.pan, 0.7 * sp.g, 0.35);
     const t = this.ctx.currentTime + 0.05;
@@ -467,6 +502,8 @@ export class AudioEngine {
     this.heard('chickadee');
   }
   woodpecker(x, y, z) {
+    // the recorded drum, a touch faster and brighter
+    if (this.voice('woodpecker', x, y, z, { ref: 25, roll: 0.9, gain: 0.7, wet: 0.45, rate: rand(1.35, 1.6) })) { this.heard('woodpecker'); return; }
     const sp = this.spatial(x, y, z, 25, 0.9);
     const out = this.out(sp.pan, 0.8 * sp.g, 0.45);
     const t = this.ctx.currentTime + 0.05;
@@ -476,6 +513,12 @@ export class AudioEngine {
     this.heard('woodpecker');
   }
   owl(x, y, z) {
+    if (this.samples && this.samples.owl) {
+      // a run of toots, slowing and sinking a little
+      const n = Math.floor(rand(4, 8)); let d = 0, r = rand(0.92, 1.05);
+      for (let i = 0; i < n; i++) { this.voice('owl', x, y, z, { ref: 40, roll: 0.7, gain: 1.1, wet: 0.6, rate: r, delay: d, fade: 0.1 }); d += rand(0.5, 0.75) + i * 0.04; r *= 0.985; }
+      this.heard('owl'); return;
+    }
     const sp = this.spatial(x, y, z, 40, 0.7);
     const out = this.out(sp.pan, 0.9 * sp.g, 0.6);
     const t = this.ctx.currentTime + 0.05;
@@ -484,6 +527,7 @@ export class AudioEngine {
     this.heard('owl');
   }
   coyotes(x, y, z) {
+    if (this.voice('coyote', x, y, z, { ref: 60, roll: 0.6, gain: 1.2, wet: 0.85, rate: rand(0.97, 1.05), fade: 1.2 })) { this.heard('coyote'); return; }
     const sp = this.spatial(x, y, z, 60, 0.6);
     const out = this.out(sp.pan, 0.55 * sp.g, 0.85);
     const t0 = this.ctx.currentTime + 0.05;
@@ -545,20 +589,20 @@ export class AudioEngine {
   // ---- ambience ----
   setupAmbience() {
     const ctx = this.ctx;
-    const mk = (buf, type, freq, q, pan = 0, rate = 1) => {
+    const mk = (buf, type, freq, q, pan = 0, rate = 1, bus = this.ambBus) => {
       const s = this.noiseSrc(buf, rate);
       const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
       const g = ctx.createGain(); g.gain.value = 0;
       const p = ctx.createStereoPanner(); p.pan.value = pan;
-      s.connect(f).connect(g).connect(p).connect(this.ambBus);
+      s.connect(f).connect(g).connect(p).connect(bus);
       return { s, f, g, p };
     };
     this.amb = {
-      rumble: mk(this.brown, 'lowpass', 380, 0.5),
-      babble: mk(this.pink, 'bandpass', 900, 0.6),
-      sparkle: mk(this.pink, 'bandpass', 2400, 1.0),
-      fall: mk(this.pink, 'lowpass', 2400, 0.4),
-      fallHi: mk(this.white, 'bandpass', 5000, 0.5),
+      rumble: mk(this.brown, 'lowpass', 380, 0.5, 0, 1, this.waterBus),
+      babble: mk(this.pink, 'bandpass', 900, 0.6, 0, 1, this.waterBus),
+      sparkle: mk(this.pink, 'bandpass', 2400, 1.0, 0, 1, this.waterBus),
+      fall: mk(this.pink, 'lowpass', 2400, 0.4, 0, 1, this.waterBus),
+      fallHi: mk(this.white, 'bandpass', 5000, 0.5, 0, 1, this.waterBus),
       wind: mk(this.pink, 'bandpass', 500, 0.8),
       leaves: mk(this.white, 'highpass', 3800, 0.5),
       rain: mk(this.white, 'bandpass', 3000, 0.4),
@@ -575,7 +619,7 @@ export class AudioEngine {
     const loop = (o) => {
       const g = ctx.createGain(); g.gain.value = 0;
       const p = ctx.createStereoPanner();
-      g.connect(p).connect(this.ambBus);
+      g.connect(p).connect(this.waterBus);
       const n = { g, p, w: 1, wT: 1 };
       // rendering takes a moment, so each loop fades in when it's ready rather than holding up the start
       setTimeout(() => {
@@ -592,7 +636,7 @@ export class AudioEngine {
     {
       const g = ctx.createGain(); g.gain.value = 0;
       const p = ctx.createStereoPanner();
-      g.connect(p).connect(this.ambBus);
+      g.connect(p).connect(this.waterBus);
       this.amb.bed = { g, p, w: 1, wT: 1, next: 0, take: 0 };
     }
     this.cricketAcc = 0; this.dripAcc = 0;
@@ -662,8 +706,12 @@ export class AudioEngine {
   setupMusic() {
     const ctx = this.ctx;
     const base = `${import.meta.env.BASE_URL}audio/music/`;
-    this.tracks = ['northern', 'taos-traditional-song', 'taos-traditional-song-2', 'taos-round-dance', 'humming-bird-song', 'the-eagles-bed']
-      .map((n) => `${base}${n}.mp3`);
+    this.titles = {
+      northern: 'Northern', 'taos-traditional-song': 'Taos Traditional Song', 'taos-traditional-song-2': 'Taos Traditional Song II',
+      'taos-round-dance': 'Taos Round Dance', 'the-eagles-bed': 'The Eagle\'s Bed', 'crow-traditional-song': 'Crow Traditional Song',
+      'i-need-thee-every-hour': 'I Need Thee Every Hour', 'taos-moonlight-song': 'Taos Moonlight Song',
+    };
+    this.tracks = Object.keys(this.titles).map((n) => `${base}${n}.mp3`);
     this.bag = []; this.lastTrack = -1;
     const el = this.trackEl = new Audio();
     el.preload = 'auto';
@@ -707,13 +755,30 @@ export class AudioEngine {
     if (this.musicT < 0) {
       if (!el.paused) el.pause();
       if (el.currentTime > 0.5 || el.ended) el.src = this.nextTrack();
-      el.currentTime = 0;
-      this.trackOn = true;
-      this.trackGain.gain.cancelScheduledValues(now);
-      this.trackGain.gain.setValueAtTime(0, now);
-      this.trackGain.gain.linearRampToValueAtTime(1.4, now + 3);
-      el.play().catch(() => { this.trackOn = false; this.musicT = 10; });
+      this.startTrack(3);
     }
+  }
+
+  // begin the loaded piece from the top, fading in over `fade` seconds
+  startTrack(fade) {
+    const now = this.ctx.currentTime, el = this.trackEl;
+    el.currentTime = 0;
+    this.trackOn = true;
+    this.trackGain.gain.cancelScheduledValues(now);
+    this.trackGain.gain.setValueAtTime(0, now);
+    this.trackGain.gain.linearRampToValueAtTime(1.4, now + fade);
+    el.play().catch(() => { this.trackOn = false; this.musicT = 10; });
+  }
+
+  // jump to the next piece now, whether one is playing or we're in a quiet spell. Returns its title.
+  skipTrack() {
+    if (!this.ready) return null;
+    const el = this.trackEl;
+    el.pause();
+    el.src = this.nextTrack();
+    this.startTrack(1.2);
+    this.offT = 0;
+    return this.titles[Object.keys(this.titles)[this.lastTrack]];
   }
 
   update(dt, st) {

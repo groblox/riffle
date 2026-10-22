@@ -13,13 +13,13 @@ Notes for whoever picks this project up next, whether a person or an agent. `REA
   - three.js r186 (`three@^0.186.1`) and Vite 8, plain ES modules.
   - No framework, no TypeScript, no tests, no 3D model files. All geometry, textures and sketches are procedural, and most of the sound is synthesized.
 - **Size:** about 13k lines of JS/GLSL in `src/`, plus about 18 MB of audio in `public/audio/`.
-- **Runs on:** desktop browsers with WebGL 2. High quality targets a high-end GPU (it was tuned on roughly an RTX 4070 Ti).
+- **Runs on:** desktop browsers with WebGL 2, and phones and tablets with touch controls. High quality targets a high-end GPU (it was tuned on roughly an RTX 4070 Ti); touch devices start on Low.
 - **Hosting:** none. The project is not deployed anywhere public. See §8 before changing that.
 
 ### Recent work (newest first)
 
 1. **Audio:**
-   - separate Sound and Music sliders (music starts at 30%)
+   - separate Effects, River and Music sliders (music starts at 30%); a skip button for the music
    - the dipper call and chipmunk chip sounds removed
    - leftover folio sounds removed, leaving only the recorded open and shut
 2. **Control dock:** rebuilt to be collapsible, with its settings remembered in localStorage.
@@ -126,9 +126,9 @@ This is the single source of truth for the land, and everything else samples it.
 | Fossils | `world/fossils.js` | six fossil types under about 3% of liftable stones; collected via `riffle.fossils` |
 | Critters | `critters/*.js` | `kit.js` has shared helpers; `under.js` is life under turned stones (about 50%) |
 | Interaction | `core/interact.js` | picking, hover tooltips, clicks, drags, stone skipping, planting, leaf boats |
-| Camera | `core/controls.js` | orbit and walk, Shift for fine movement, soft bounds (`VIEW`), `sit(eye, yaw, pitch)` / `stand()` |
+| Camera | `core/controls.js` | orbit and walk, Shift for fine movement, soft bounds (`VIEW`), `sit(eye, yaw, pitch)` / `stand()`, touch gestures (see §5), `setAspect` widens the FOV on portrait screens (`baseFov`) |
 | Audio | `audio/audio.js` | see §4 |
-| UI | `ui/ui.js`, `ui/folio.js`, `ui/guide.js`, `ui/sketches/*`, `style.css` | dock, toasts, tooltips, hints; the folio field guide; entry data; SVG ink-and-wash sketches |
+| UI | `ui/ui.js`, `ui/folio.js`, `ui/guide.js`, `ui/sketches/*`, `style.css` | dock, toasts, tooltips, hints, the touch tray and context bar; the folio field guide; entry data; SVG ink-and-wash sketches |
 
 ### Persisted state (localStorage)
 
@@ -136,7 +136,7 @@ This is the single source of truth for the land, and everything else samples it.
 |---|---|
 | `riffle.found`, `riffle.foundMeta` | field-guide discoveries and when and how they were made |
 | `riffle.fossils` | collected fossils |
-| `riffle.vol`, `riffle.musicVol` | the two volume levels |
+| `riffle.vol`, `riffle.waterVol`, `riffle.musicVol` | the sound, creek (0–1.5) and music levels |
 | `riffle.dockFolded` | whether the dock is folded |
 
 ---
@@ -144,10 +144,13 @@ This is the single source of truth for the land, and everything else samples it.
 ## 4. Audio
 
 - **Graph:** `sfx`, `ambBus`, `musicBus` and `reverb` feed `master` and a compressor.
-  - The **Sound** slider sets the `sfx` and `ambBus` gains.
+  - The **Effects** slider sets the `sfx` and `ambBus` gains (one-shots, birds, wind, rain, fire).
+  - The **River** slider sets `waterBus`, which feeds `master` directly, so it is independent of Effects: the bubble loops, the recorded bed, rumble/babble/sparkle and the falls all route through it.
   - The **Music** slider sets `musicBus` to `musicVolume × 1.8`.
   - **Mute** sets `master` to 0.
-- **Samples:** `public/audio/sfx/*.mp3` are decoded at start. `onsets()` finds individual hits inside the rock recordings, and `knock()` plays a single onset pitched by the stone's size.
+  - `skipTrack()` jumps to the next piece now (the skip button in the Music row).
+- **Samples:** `public/audio/sfx/*.mp3` are decoded at start (the `files` map in `loadSamples()`). `onsets()` finds individual hits inside the rock recordings, and `knock()` plays a single onset pitched by the stone's size (large stones drop to 0.4×; only `large-rocks-1` is used).
+- **Recorded calls and impacts** (added 10.22.26): thuds (`thudS`/`thudL`, from the Warner Bros. cartoon library), the stoke (`stoke`, a real wood-fire recording), raven (rook caws played at ~0.8×), frog, whistle, the five scheduled calls (wren, chickadee, woodpecker, owl, coyote). `voice()` plays a recording at a world position. Every one keeps its synthesized version as a fallback until the file loads. Sources: `G:\Music\Sounds of Nature` (frogs, owl, wolves, cardinal whistles, woodpecker-like drum), `D:\sfx` (rookery, wood fire), and the Warner Bros. library. Several are stand-ins (the collection has no canyon wren or chickadee, and the “coyote” is wolves); swap the files in `public/audio/sfx/` to improve them.
 - **Creek bed:** two recorded creek takes play as an equal-power crossfade loop (`updateBed`), under the synthesized bubble model.
 - **Music:**
   - Tracks stream through an `HTMLAudioElement` into `createMediaElementSource`. The list is `tracks` in `setupMusic()`.
@@ -159,10 +162,20 @@ This is the single source of truth for the land, and everything else samples it.
   - `bookShut` is the tail of the open recording (`from: 0.62`), timed 380 ms into the close.
   - There are deliberately no strap, clasp or set-down sounds.
 - **Removed on request (don't bring them back):** the dipper call, the chipmunk chip and the old synthesized folio sounds.
+- **Sound report** (`docs/sound-report.html`, untracked, local only):
+  - Lists every sound in use: 23 recorded sfx and 8 music tracks with `<audio>` players, and all synthesized one-shots, songs and ambience layers with the source lines that fire them.
+  - The synthesized rows have ▶ buttons that run the real `AudioEngine`, so it must be opened through the dev server (`http://localhost:5199/docs/sound-report.html`), not as a file. Its module script imports `/src/audio/audio.js` and `/src/world/shape.js`; without the dev server the buttons grey out and a notice shows.
+  - One-shots call `play(name, opts)`. Songs call `canyonWren`, `chickadee`, `woodpecker`, `owl`, `coyotes` at a fixed spot near the listener. The cricket and raindrop-bubble rows loop `cricket()` and `bubble()` themselves.
+  - Ambience buttons set a fake state (listener position, wind, rain) and call `update(0.05, st)` every 50 ms.
+  - The report sets `musicOn = false` and pushes the `next` bird and thunder timers out, so only what you press is heard.
+  - It is generated, not hand-edited. There's no generator in the repo (it lived in a session scratchpad), so edit the HTML directly or rebuild it from this description.
+  - It stays local because it links the unlicensed music and sfx. Don't publish it.
 
 ---
 
 ## 5. Gotchas
+
+**Version stamp**: `src/version.js` holds `VERSION` (`MM.DD.YY.HHMM`-style, e.g. `10.04.26.1823`) and the `NOTES` list. Bump `VERSION` and add a line to the top of `NOTES` with every change; the stamp shows faintly bottom-left and clicking it opens the notes.
 
 These cost real time before. Read them before touching the related code.
 
@@ -182,6 +195,9 @@ These cost real time before. Read them before touching the related code.
 **Camera**
 - Camera bounds come from `VIEW` in `shape.js`: focus |z| ≤ 98, lateral −60 to +62 from the creek, eye within ±126. Targets outside these get pulled back.
 - When positioning the camera from code, set `yaw`, `dist` and `smoothTarget` directly, not only the `*T` targets.
+- Cliffs: when the eye would end up inside terrain (a wall behind it), `rayBlocked()` / `occP` tip the camera up over it by the least pitch that clears, and `floorY` keeps the eye above the ground by a floor that climbs fast but sinks gently (and looks a little ahead), so riding off a ledge doesn't snap the view.
+- `flyTo(x, z, dist)` glides the focus somewhere (the **V** key / campsite button, `app.visitCamp`); any steering of your own ends it. `sit(eye, yaw, pitch, wide)` takes a lens multiplier: the tent sits at the door with `wide = 1.7`.
+- The creek's water mesh runs to z = ±340 (the stream is defined to ±340) and the far terrain's valley corridor is wide (`valley` in `farHeight`), so the ends of the world are lost in haze, not a visible edge or a slit.
 
 **The trail**
 - `TRAIL` is a list of control points that was routed offline once:
@@ -193,6 +209,17 @@ These cost real time before. Read them before touching the related code.
   - a Float32 distance array compared against Float64 heap values silently drops states
   - 22.5° heading steps can't climb slopes steeper than about 0.5
   - judge U-turns by rise over arc length, not by the terrain slope along the arc
+
+**Touch**
+- Touch mode is `body.touch`, set from `(pointer: coarse)` at load and flipped by `Controls.setTouch` whenever the last input was a finger or a mouse. CSS shows `.for-touch` / `.for-mouse` copies of the hint text off it.
+- Gestures live in `Controls.touchDown/Move/Up`: one finger pans by keeping the ground point under it (`planeHit` on the focus plane), two fingers pinch/orbit/tilt/twist, a still press of 0.32 s becomes a hold (`held`, `'hold'` event, wall-clock so slow frames don't stretch it). A tap emits the normal `click`.
+- A finger has no hover: `Interaction.update` keeps the cursor live only while `held` or for `tapT` after a tap. Carrying a stone and the hand in the water need `held` on touch, so a quick drag always pans.
+- The touch tray arms `Interaction.tool` (stone, flower, leaf); the next tap calls `useTool` there. While placing a camp, taps move `Interaction.pin` instead of pitching; the context bar (`syncContext` in `main.js`, `UI.setContext`) has the Rotate / Pitch here / Cancel / Get up / Sleep buttons.
+- `touchText()` in `ui.js` rewrites toasts and tooltip hints for touch ("click" to "tap", key shortcuts dropped). New hint strings with key names should fit its patterns.
+- **Folio layouts** (`style.css`, `folio.js`): wide screens get the two-page spread. Portrait screens up to 900 px (phones and tablets upright, `flat()` in `folio.js` mirrors the media query) get a flat stack: a short page with one heading row and a sideways-scrolling strip of thumbnails (`.index`, cells sized by `Folio.fit()` so a half cell always peeks out), the entry filling the page below, and the ribbons as a scrolling row under the book. Short landscape phones keep the spread but trim the left page (two-column index, no stamp). When flat, `setOpen` skips the cover choreography (ready in about 0.3 s) and `go()` swaps the page directly, because the `.flip` leaf is `display: none` there and would otherwise leave the old page up for 0.9 s. `body.guide-open` hides the game's touch buttons behind the book.
+- Specificity trap: `.index { touch-action: pan-y }` is defined late in the file; the phone layout needs `.guide .index { touch-action: pan-x }` to beat it, or a sideways swipe on the strip turns the page instead of scrolling it.
+- A finger fires `pointerleave` on every lift, so `app.pointerInside` ignores touch pointers.
+- To test in headless Chrome, open a Playwright context with `hasTouch: true, isMobile: true` and send `Input.dispatchTouchEvent` through a CDP session (Playwright's `tap` only does single taps).
 
 **Workflow**
 - Headless Chrome runs requestAnimationFrame at about 1 fps. Animated critters barely move, and the auto-quality check can wrongly drop to Low, so always pass `q=1` when testing.
@@ -274,6 +301,5 @@ None of these have been requested. They're simply the obvious next steps if the 
 
 - a hosted, playable build (blocked on §8)
 - a favicon: the browser currently logs a 404 for `/favicon.ico`, which is harmless
-- touch controls for phones and tablets (the LAN setup makes mobile testing easy, but input is mouse and keyboard only)
 - a quick-look shortcut to the tarn and upper trail, since they're a long walk from the start
 - a small `.gitattributes` to quiet the CRLF warnings

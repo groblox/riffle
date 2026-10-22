@@ -39,6 +39,18 @@ export class Interaction {
     app.rocks.onImpact = (rk, x, y, z, speed, water, what) => this.rockImpact(rk, x, y, z, speed, water, what);
     app.rocks.onMoved = (rk, from) => this.rockMoved(rk, from);
     c.on('key', (e) => this.key(e));
+    // touch: there is no hover, so a tap shows the name of what it touched for a moment, and a hold
+    // (press, keep still) shows it while the finger stays down and turns the finger into the hand
+    c.on('hold', () => { this.ringPulse = 1; this.tapT = 0; try { navigator.vibrate && navigator.vibrate(8); } catch { /* not allowed */ } });
+    this.tapT = 0;          // a tap's label and ring linger this long
+    this.tapPick = null;
+    this.tool = null;       // armed from the touch tray: the next tap skips a stone, plants or floats a leaf there
+    this.pin = null;        // touch, placing a camp: the spot last tapped (the ghost waits there)
+  }
+
+  setTool(t) {
+    this.tool = this.tool === t ? null : t;
+    this.app.ui.setTool(this.tool);
   }
 
   // ---- ray helpers ----
@@ -123,28 +135,48 @@ export class Interaction {
   }
 
   update(dt) {
-    const a = this.app;
+    const a = this.app, c = a.controls, touch = c.touch;
+    const placing = a.camp && a.camp.placing;
     const ray = this.setRay();
-    const hit = this.marchGround(ray);
     const cur = this.cursor;
-    if (hit) { cur.x = hit.x; cur.y = hit.y; cur.z = hit.z; cur.water = hit.water; cur.active = a.controls.enabled && a.pointerInside; }
-    else cur.active = false;
+    this.tapT = c.panning || c.touches.size > 1 ? 0 : Math.max(0, this.tapT - dt);
+    if (touch && placing) {
+      // the ghost camp waits where it was last tapped (first, the middle of the view)
+      if (!this.pin) {
+        this.ray.setFromCamera({ x: 0, y: -0.15 }, a.camera);
+        this.pin = this.marchGround(this.ray.ray);
+        this.setRay();
+      }
+      if (this.pin) { cur.x = this.pin.x; cur.y = this.pin.y; cur.z = this.pin.z; cur.water = this.pin.water; }
+      cur.active = !!this.pin && c.enabled;
+    } else {
+      if (!placing) this.pin = null;
+      const hit = this.marchGround(ray);
+      const inside = touch ? c.held || this.tapT > 0 : a.pointerInside;
+      if (hit) { cur.x = hit.x; cur.y = hit.y; cur.z = hit.z; cur.water = hit.water; cur.active = c.enabled && inside; this.hitT = hit.t; }
+      else cur.active = false;
+    }
     // hover pick (throttled)
     this.lastHoverT -= dt;
     if (this.lastHoverT < 0) {
       this.lastHoverT = 0.06;
-      const placing = a.camp && a.camp.placing;
-      this.hovered = a.controls.enabled && a.pointerInside && !this.carrying && !placing ? this.pickObject(ray, hit ? hit.t + 0.5 : 800) : null;
-      const grabbable = this.hovered && this.hovered.kind === 'rock' && a.rocks.canCarry(this.hovered.obj);
-      a.canvas.classList.toggle('hover', !!this.hovered || (cur.active && cur.water));
-      a.canvas.classList.toggle('grab', !!grabbable && !this.carrying);
-      a.canvas.classList.toggle('grabbing', !!this.carrying);
-      const m = a.controls.mouse;
-      if (placing) a.ui.showTooltip(cur.active && !a.controls.dragging ? a.camp.placeLabel : null, m.x, m.y, a.camp.placeHint);
-      else a.ui.showTooltip(this.hovered && !a.controls.dragging ? this.hovered.label : null, m.x, m.y, this.hovered && this.hovered.hint);
+      const m = c.mouse;
+      if (touch) {
+        this.hovered = placing || this.carrying ? null : c.held && cur.active ? this.pickObject(ray, this.hitT + 0.5) : this.tapT > 0 ? this.tapPick : null;
+        if (placing) a.ui.showTooltip(cur.active ? a.camp.placeLabel : null, m.x, m.y, a.camp.placeHint, true);
+        else a.ui.showTooltip(this.hovered && !c.panning ? this.hovered.label : null, m.x, m.y, this.hovered && this.hovered.hint, true);
+      } else {
+        this.hovered = c.enabled && a.pointerInside && !this.carrying && !placing ? this.pickObject(ray, cur.active ? this.hitT + 0.5 : 800) : null;
+        const grabbable = this.hovered && this.hovered.kind === 'rock' && a.rocks.canCarry(this.hovered.obj);
+        a.canvas.classList.toggle('hover', !!this.hovered || (cur.active && cur.water));
+        a.canvas.classList.toggle('grab', !!grabbable && !this.carrying);
+        a.canvas.classList.toggle('grabbing', !!this.carrying);
+        if (placing) a.ui.showTooltip(cur.active && !c.dragging ? a.camp.placeLabel : null, m.x, m.y, a.camp.placeHint);
+        else a.ui.showTooltip(this.hovered && !c.dragging ? this.hovered.label : null, m.x, m.y, this.hovered && this.hovered.hint);
+      }
     }
-    // carrying a stone: lift it once the pointer starts to drag, then it follows the cursor
-    if (this.press && !this.carrying && a.controls.leftDown && a.controls.moved > 6) {
+    // carrying a stone: lift it once the pointer starts to drag (a finger has to hold first), then it follows the cursor
+    if (this.press && !this.carrying && c.leftDown && c.moved > 6 && (!touch || c.held)) {
       const rk = this.carrying = this.press; this.press = null;
       const x0 = rk.cx, z0 = rk.cz, wet = this.stoneWet(rk), fresh = !rk.lifted;
       a.rocks.grab(rk);
@@ -158,7 +190,7 @@ export class Interaction {
     if (cur.active && !cur.water) P[0].set(cur.x, cur.y, cur.z, a.controls.leftDown ? 1.4 : 0.85);
     else P[0].set(0, -1000, 0, 0);
     // hand in the water
-    if (this.dragging && !this.carrying && !this.press && !(a.camp && a.camp.placing) && !a.controls.seat && a.controls.leftDown && cur.active && cur.water && a.controls.moved > 4) {
+    if (this.dragging && !this.carrying && !this.press && !placing && !c.seat && c.leftDown && cur.active && cur.water && c.moved > 4 && (!touch || c.held)) {
       this.dragAcc += dt;
       if (this.dragAcc > 0.035) {
         this.dragAcc = 0;
@@ -169,7 +201,7 @@ export class Interaction {
     }
     this.updateStones(dt);
     // cursor ring
-    const show = cur.active && !a.controls.dragging || (cur.active && a.controls.leftDown);
+    const show = cur.active && !c.dragging || (cur.active && c.leftDown);
     const target = show && !a.ui.hidden ? (this.hovered || this.carrying ? 0.55 : 0.22) : 0;
     this.ringMat.opacity += (target - this.ringMat.opacity) * Math.min(1, dt * 10);
     if (cur.active) {
@@ -191,11 +223,17 @@ export class Interaction {
   discover(p, how) { if (p && p.guide) this.app.ui.discover(p.guide, how); }
 
   click() {
-    const a = this.app;
-    if (a.camp && a.camp.placing) { a.camp.confirm(); return; }
+    const a = this.app, touch = a.controls.touch;
     const ray = this.setRay();
     const hit = this.marchGround(ray);
+    if (a.camp && a.camp.placing) {
+      // a finger moves the ghost camp to the tapped spot; pitching it is a button (see UI context bar)
+      if (touch) { if (hit) this.pin = hit; } else a.camp.confirm();
+      return;
+    }
+    if (this.tool && hit) { this.useTool(hit); return; }
     const p = this.pickObject(ray, hit ? hit.t + 0.5 : 800);
+    if (touch) { this.tapPick = p; this.tapT = p ? 1.8 : 0.5; this.lastHoverT = 0; }
     if (p) { this.clickObject(p, hit); return; }
     if (!hit) return;
     if (hit.water) {
@@ -231,7 +269,7 @@ export class Interaction {
       case 'dragonfly': a.dragonflies.scare(p.x, p.z, 1.5); break;
       case 'raven': a.ravens.poke(o); break;
       case 'dipper': a.dippers.flyAway(o, true); break;
-      case 'heron': a.heron.takeOff(); break;
+      case 'heron': o.takeOff(); break;
       case 'chipmunk': a.chipmunks.scare(p.x, p.z, 1); break;
       case 'lizard': if (o.state === 'bask' && Math.random() < 0.5) { o.push = 1; } else a.lizards.scare(p.x, p.z, 1); break;
       case 'frog': a.frogs.jump(o); break;
@@ -416,11 +454,51 @@ export class Interaction {
     }
   }
 
-  // ---- stones ----
-  throwStone() {
+  // ---- the little gifts: a skipped stone, a planted flower, a leaf boat, a whistle ----
+  // each takes a point { x, y, z, water } (the cursor from the keyboard, a tapped spot from the touch tray)
+  useTool(p) {
+    const ok = this.tool === 'stone' ? this.throwStone(p) : this.tool === 'flower' ? this.plant(p) : this.tool === 'leaf' ? this.floatLeaf(p) : false;
+    this.cursor.x = p.x; this.cursor.y = p.y; this.cursor.z = p.z; this.cursor.water = p.water;
+    this.tapPick = null; this.tapT = 0.5;
+    if (!ok) this.app.audio.play('tick', { x: p.x, y: p.y, z: p.z, gain: 0.35 });
+  }
+
+  plant(p) {
+    if (p.water || normalAt(p.x, p.z).y <= 0.7) return false;
+    this.app.veg.plantFlower(p.x, p.z, Math.floor(Math.random() * 4));
+    this.app.audio.play('chime', { x: p.x, y: p.y, z: p.z, gain: 0.5, wet: 0.4 });
+    this.pollen(p.x, p.y + 0.2, p.z, [0.7, 1, 0.6], 14);
+    return true;
+  }
+
+  floatLeaf(p) {
+    if (!p.water) return false;
     const a = this.app;
-    const cur = this.cursor;
-    if (!cur.active) return;
+    a.leaves.spawn(p.x, p.y + 0.02, p.z, [0.95, 0.6, 0.1], { mode: 'water', boat: true, life: 240 });
+    a.water.disturb(p.x, p.z, 0.3, 0.02);
+    a.audio.play('plop', { x: p.x, y: p.y, z: p.z, gain: 0.3 });
+    return true;
+  }
+
+  whistle() {
+    const a = this.app, f = a.controls.smoothTarget;
+    a.audio.play('whistle', { gain: 0.6, wet: 0.5 });
+    setTimeout(() => {
+      if (U.uNight.value < 0.5) {
+        if (Math.random() < 0.6) a.audio.chickadee(f.x - 15 - Math.random() * 20, f.y + 6, f.z + (Math.random() - 0.5) * 30);
+        else a.audio.canyonWren(f.x + 40, f.y + 20, f.z + (Math.random() - 0.5) * 40);
+      } else a.audio.owl(f.x - 40, f.y + 15, f.z + (Math.random() - 0.5) * 40);
+    }, 1400 + Math.random() * 900);
+    // chipmunks near where you're looking sit up to listen
+    const cur = this.cursor.active ? this.cursor : f;
+    for (const c of a.chipmunks.list) if (Math.hypot(c.x - cur.x, c.z - cur.z) < 25) { c.state = 'idle'; c.sit = 1; c.timer = 3; }
+  }
+
+  // ---- stones ----
+  throwStone(p = this.cursor) {
+    const a = this.app;
+    const cur = p;
+    if (p === this.cursor && !cur.active) return false;
     const cam = a.camera.position;
     const fwd = new THREE.Vector3(cur.x - cam.x, 0, cur.z - cam.z);
     const dist = fwd.length();
@@ -439,6 +517,7 @@ export class Interaction {
     a.scene.add(m);
     this.stones.push({ m, x: sx, y: sy, z: sz, vx: dx / T, vy, vz: dz / T, skips: 0, state: 'air', spin: 0, life: 0 });
     a.audio.play('throw', { x: sx, y: sy, z: sz, gain: 0.5 });
+    return true;
   }
 
   updateStones(dt) {
@@ -493,36 +572,12 @@ export class Interaction {
       case 'KeyC': if (a.camp && !this.carrying) a.camp.toggle(); break;
       case 'KeyR': if (a.camp) a.camp.rotate(); break;
       case 'KeyX': if (a.camp) a.camp.packUp(); break;
+      case 'KeyV': if (a.visitCamp) a.visitCamp(); break;
       case 'Escape': if (a.camp && !a.camp.getUp()) a.camp.cancel(); break;
       case 'KeyZ': if (a.camp) a.camp.sleep(); break;
-      case 'KeyG':
-        if (cur.active && !cur.water && normalAt(cur.x, cur.z).y > 0.7) {
-          const type = Math.floor(Math.random() * 4);
-          a.veg.plantFlower(cur.x, cur.z, type);
-          a.audio.play('chime', { x: cur.x, y: cur.y, z: cur.z, gain: 0.5, wet: 0.4 });
-          this.pollen(cur.x, cur.y + 0.2, cur.z, [0.7, 1, 0.6], 14);
-        }
-        break;
-      case 'KeyB':
-        if (cur.active && cur.water) {
-          a.leaves.spawn(cur.x, cur.y + 0.02, cur.z, [0.95, 0.6, 0.1], { mode: 'water', boat: true, life: 240 });
-          a.water.disturb(cur.x, cur.z, 0.3, 0.02);
-          a.audio.play('plop', { x: cur.x, y: cur.y, z: cur.z, gain: 0.3 });
-        }
-        break;
-      case 'Space': {
-        e.preventDefault();
-        a.audio.play('whistle', { gain: 0.6, wet: 0.5 });
-        setTimeout(() => {
-          const f = a.controls.smoothTarget;
-          if (U.uNight.value < 0.5) {
-            if (Math.random() < 0.6) a.audio.chickadee(f.x - 15 - Math.random() * 20, f.y + 6, f.z + (Math.random() - 0.5) * 30);
-            else a.audio.canyonWren(f.x + 40, f.y + 20, f.z + (Math.random() - 0.5) * 40);
-          } else a.audio.owl(f.x - 40, f.y + 15, f.z + (Math.random() - 0.5) * 40);
-        }, 1400 + Math.random() * 900);
-        for (const c of a.chipmunks.list) if (Math.hypot(c.x - cur.x, c.z - cur.z) < 25) { c.state = 'idle'; c.sit = 1; c.timer = 3; }
-        break;
-      }
+      case 'KeyG': if (cur.active) this.plant(cur); break;
+      case 'KeyB': if (cur.active) this.floatLeaf(cur); break;
+      case 'Space': e.preventDefault(); this.whistle(); break;
       default: break;
     }
   }
